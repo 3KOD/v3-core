@@ -1,0 +1,24 @@
+
+archetype IERC20Minimal
+
+view balanceOf(account : address) : nat {}
+
+entry transfer(recipient : address, amount : nat) : bool {}
+
+view allowance(owner : address, spender : address) : nat {}
+
+entry approve(spender: address, amount: nat) : bool {}
+
+entry transferFrom(sender : address, recipient: address, amount : nat) : bool {}
+
+event Transfer {
+    %from : address;
+    %to : address;
+    value: nat;
+}
+
+event Approval {
+    owner: address;
+    spender: address;
+    value: nat;
+}

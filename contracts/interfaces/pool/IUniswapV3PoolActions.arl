@@ -1,0 +1,42 @@
+archetype IUniswapV3PoolActions
+
+entry initialize(sqrtPriceX96: nat) {}
+
+getter mint(
+    recipient : address,
+    tickLower : int,
+    tickUpper : int,
+    amount : nat,
+    data : bytes
+) : <nat, nat> {}
+
+getter collect (
+    recipient : address,
+    tickLower : int,
+    tickUpper : int,
+    amount0Requested : nat,
+    amount1Requested : nat
+) : <nat, nat> {}
+
+getter burn (
+    tickLower: int,
+    tickUpper: int,
+    amount: nat
+) : <nat, nat> {}
+
+getter swap(
+    recipient: address,
+    zeroForOne: bool,
+    amountSpecified: int,
+    sqrtPriceLimitX96: nat,
+    data: bytes
+) : <int, int> {};
+
+entry flash(
+    recipient: address,
+    amount0: nat,
+    amount1: nat,
+    data: bytes
+) {};
+
+entry increaseObservationCardinalityNext(observationCardinalityNext: nat) {};

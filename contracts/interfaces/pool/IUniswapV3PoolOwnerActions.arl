@@ -1,0 +1,10 @@
+
+archetype IUniswapV3PoolOwnerActions
+
+entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) {}
+getter collectProtocol(
+    recipient: address,
+    amount0Requested: nat,
+    amount1Requested: nat
+): <nat, nat> {};
+

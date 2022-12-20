@@ -1,0 +1,6 @@
+
+archetype NoDelegateCall(original: address)
+
+entry noDelegateCall() {
+  called by original
+}

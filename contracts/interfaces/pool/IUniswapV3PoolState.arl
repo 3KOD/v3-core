@@ -1,0 +1,12 @@
+
+archetype IUniswapV3PoolState
+
+view slot0(): <nat, int, nat, nat, nat, nat, bool> {};
+view feeGrowthGlobal0X128(): nat;
+view feeGrowthGlobal1X128(): nat;
+view protocolFees(): <nat, nat>;
+view liquidity(): nat;
+view ticks(tick: int): <nat, int, nat, nat, int, nat, nat, bool>;
+view tickBitmap(wordPosition: int): nat;
+view positions(%key: bytes32): <nat, nat, nat, nat, nat>;
+view observations(index: nat): <nat, int, nat, bool>;

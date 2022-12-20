@@ -1,0 +1,59 @@
+archetype IUniswapV3PoolEvents
+
+event Initialize {sqrtPriceX96 : nat; tick : int}
+
+event Mint {
+    sender: address;
+    owner: address;
+    tickLower: int;
+    tickUpper: int;
+    amount: nat;
+    amount0: nat;
+    amount1: nat;
+}
+
+event Collect{
+    owner: address;
+    recipient: address;
+    tickLower: int;
+    tickUpper: int;
+    amount0: nat;
+    amount1: nat;
+}
+
+event Burn{
+    owner: address;
+    tickLower: int;
+    tickUpper: int;
+    amount: nat;
+    amount0: nat;
+    amount1: nat;
+}
+
+event Swap{
+    sender: address;
+    recipient: address;
+    amount0: int;
+    amount1: int;
+    sqrtPriceX96: nat;
+    liquidity: nat;
+    tick: int;
+}
+
+event Flash{
+    sender: address;
+    recipient: address;
+    amount0: nat;
+    amount1: nat;
+    paid0: nat;
+    paid1: nat;
+}
+
+event IncreaseObservationCardinalityNext{
+    observationCardinalityNextOld: nat;
+    observationCardinalityNextNew: nat;
+}
+
+event SetFeeProtocol{feeProtocol0Old: nat; feeProtocol1Old: nat; feeProtocol0New: nat; feeProtocol1New: nat;}
+
+event CollectProtocol{sender: address; recipient: address; amount0: nat; amount1: nat;}

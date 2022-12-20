@@ -1,0 +1,11 @@
+archetype IUniswapV3PoolDeployer
+
+record Parameters {
+    factory : address;
+    token0 : address;
+    token1 : address;
+    fee : nat;
+    tickSpacing : int;
+}
+
+view parameters() : Parameters {}

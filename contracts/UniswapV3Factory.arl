@@ -1,0 +1,30 @@
+
+archetype UniswapV3Factory(owner: address = caller)
+
+import IUniswapV3Factory from "./interfaces/IUniswapV3Factory.tz"
+import UniswapV3PoolDeployer from "./UniswapV3PoolDeployer.tz"
+import NoDelegateCall from "./NoDelegateCall.tz"
+import UniswapV3Pool from "./UniswapV3Pool.tz"
+
+/// @inheritdoc IUniswapV3Factory
+asset feeAmountTickSpacing identified by fee to big_map {
+    fee : nat;
+    tickSpacing : int = 0;
+} initialized by {
+    { fee = 500; tickSpacing = 10 };
+    { fee = 3000; tickSpacing = 60 };
+    { fee = 10000; tickSpacing = 200 }
+}
+
+asset getPool identified by token0 token1 feeOfGetPool to big_map {
+    token0: address;
+    token1: address;
+    feeOfGetPool: nat;
+    pool: address;
+}
+
+getter createPool(tokenA: address, tokenB: address, fee: nat) : address {}
+
+entry setOwner(_owner: address) {}
+
+entry enableFeeAmount(fee: nat, tickSpacing: int) {}

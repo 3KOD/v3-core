@@ -1,0 +1,880 @@
+archetype UniswapV3Pool
+
+import IUniswapV3Pool from "./interfaces/IUniswapV3Pool.tz"
+import NoDelegateCall from "./NoDelegateCall.tz"
+import LowGasSafeMath from "./libraries/LowGasSafeMath.tz"
+import SafeCast from "./libraries/SafeCast.tz"
+import Tick from "./libraries/Tick.tz"
+import TickBitmap from "./libraries/TickBitmap.tz"
+import Position from "./libraries/Position.tz"
+import Oracle from "./libraries/Oracle.tz"
+import FullMath from "./libraries/FullMath.tz"
+import FixedPoint128 from "./libraries/FixedPoint128.tz"
+import TransferHelper from "./libraries/TransferHelper.tz"
+import TickMath from "./libraries/TickMath.tz"
+import LiquidityMath from "./libraries/LiquidityMath.tz"
+import SqrtPriceMath from "./libraries/SqrtPriceMath.tz"
+import SwapMath from "./libraries/SwapMath.tz"
+import IUniswapV3PoolDeployer from "./interfaces/IUniswapV3PoolDeployer.tz"
+import IUniswapV3Factory from "./interfaces/IUniswapV3Factory.tz"
+import IERC20Minimal from "./interfaces/IERC20Minimal.tz"
+import IUniswapV3MintCallback from "./interfaces/callback/IUniswapV3MintCallback.tz"
+import IUniswapV3SwapCallback from "./interfaces/callback/IUniswapV3SwapCallback.tz"
+import IUniswapV3FlashCallback from "./interfaces/callback/IUniswapV3FlashCallback.tz"
+
+// using LowGasSafeMath for uint256;
+// using LowGasSafeMath for int256;
+// using SafeCast for uint256;
+// using SafeCast for int256;
+// using Tick for mapping(int24 => Tick.Info);
+// using TickBitmap for mapping(int16 => uint256);
+// using Position for mapping(bytes32 => Position.Info);
+// using Position for Position.Info;
+// using Oracle for Oracle.Observation[65535];
+
+/// @inheritdoc IUniswapV3PoolImmutables
+variable factory : address;
+/// @inheritdoc IUniswapV3PoolImmutables
+variable token0 : address;
+/// @inheritdoc IUniswapV3PoolImmutables
+variable token1 : address;
+/// @inheritdoc IUniswapV3PoolImmutables
+variable fee : nat;
+
+/// @inheritdoc IUniswapV3PoolImmutables
+variable tickSpacing : int;
+
+/// @inheritdoc IUniswapV3PoolImmutables
+variable maxLiquidityPerTick : nat;
+
+/// @inheritdoc IUniswapV3PoolState
+asset slot0 {
+    // the current price
+    sqrtPriceX96: nat;
+    // the current tick
+    tick: int;
+    // the most-recently updated index of the observations array
+    observationIndex: nat;
+    // the current maximum number of observations that are being stored
+    observationCardinality: nat;
+    // the next maximum number of observations to store, triggered in observations.write
+    observationCardinalityNext: nat;
+    // the current protocol fee as a percentage of the swap fee taken on withdrawal
+    // represented as an integer denominator (1/x)%
+    feeProtocol: nat;
+    // whether the pool is locked
+    unlocked: bool;
+}
+
+/// @inheritdoc IUniswapV3PoolState
+variable feeGrowthGlobal0X128 : nat;
+/// @inheritdoc IUniswapV3PoolState
+variable feeGrowthGlobal1X128 : nat;
+
+// accumulated protocol fees in token0/token1 units
+/// @inheritdoc IUniswapV3PoolState
+asset protocolFees {
+    token0: nat;
+    token1: nat;
+}
+
+/// @inheritdoc IUniswapV3PoolState
+variable liquidity : nat;
+
+/// @inheritdoc IUniswapV3PoolState
+asset ticks identified by tickId to big_map {
+    tickId: int;
+    info: Tick.Info;
+}
+// mapping(int24 => Tick.Info) public override ticks;
+/// @inheritdoc IUniswapV3PoolState
+asset tickBitmap identified by tick to big_map {
+    tick : int;
+    tickSpacing: nat = 0;
+}
+/// @inheritdoc IUniswapV3PoolState
+asset positions identified by positionId to big_map {
+    positionId: bytes32;
+    positionInfo: Position.Info;
+}
+// mapping(bytes32 => Position.Info) public override positions;
+/// @inheritdoc IUniswapV3PoolState
+variable observations: Oracle.Observation[65535];
+// Oracle.Observation[65535] public override observations;
+
+/// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
+/// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
+/// we use balance checks to determine the payment status of interactions such as mint, swap and flash.
+function startLock(): bool {
+
+}
+
+function endLock() {
+
+}
+// modifier lock() {
+//     require(slot0.unlocked, 'LOK');
+//     slot0.unlocked = false;
+//     _;
+//     slot0.unlocked = true;
+// }
+
+/// @dev Prevents calling a function from anyone except the address returned by IUniswapV3Factory#owner()
+function onlyFactoryOwner(): bool {
+    // require(msg.sender == IUniswapV3Factory(factory).owner());
+    // _;
+}
+
+// constructor() {
+//     int24 _tickSpacing;
+//     (factory, token0, token1, fee, _tickSpacing) = IUniswapV3PoolDeployer(msg.sender).parameters();
+//     tickSpacing = _tickSpacing;
+
+//     maxLiquidityPerTick = Tick.tickSpacingToMaxLiquidityPerTick(_tickSpacing);
+// }
+
+/// @dev Common checks for valid tick inputs.
+function checkTicks(tickLower: int, tickUpper: int) /* private pure */ {
+    // require{tickLower < tickUpper, 'TLU'};
+    // require{tickLower >= TickMath.MIN_TICK, 'TLM'};
+    // require{tickUpper <= TickMath.MAX_TICK, 'TUM'};
+}
+
+/// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
+view _blockTimestamp() /* internal view virtual returns */ : nat {
+    // return uint32(block.timestamp); // truncation is desired
+}
+
+/// @dev Get the pool's balance of token0
+/// @dev This function is gas optimized to avoid a redundant extcodesize check in addition to the returndatasize
+/// check
+view balance0() /* private view returns */ : nat {
+    // (bool success, bytes memory data) = token0.staticcall(
+    //     abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this))
+    // );
+    // require(success && data.length >= 32);
+    // return abi.decode(data, (uint256));
+}
+
+/// @dev Get the pool's balance of token1
+/// @dev This function is gas optimized to avoid a redundant extcodesize check in addition to the returndatasize
+/// check
+view balance1() /* private view returns */ : nat {
+    // (bool success, bytes memory data) = token1.staticcall(
+    //     abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this))
+    // );
+    // require(success && data.length >= 32);
+    // return abi.decode(data, (uint256));
+}
+
+/// @inheritdoc IUniswapV3PoolDerivedState
+view snapshotCumulativesInside(tickLower: int, tickUpper: int)
+    /* external
+    view
+    override
+    noDelegateCall
+    returns */ : {
+        /* tickCumulativeInside: */ int,
+        /* secondsPerLiquidityInsideX128: */ nat,
+        /* secondsInside: */ nat
+    }
+{
+    // checkTicks(tickLower, tickUpper);
+
+    // int56 tickCumulativeLower;
+    // int56 tickCumulativeUpper;
+    // uint160 secondsPerLiquidityOutsideLowerX128;
+    // uint160 secondsPerLiquidityOutsideUpperX128;
+    // uint32 secondsOutsideLower;
+    // uint32 secondsOutsideUpper;
+
+    // {
+    //     Tick.Info storage lower = ticks[tickLower];
+    //     Tick.Info storage upper = ticks[tickUpper];
+    //     bool initializedLower;
+    //     (tickCumulativeLower, secondsPerLiquidityOutsideLowerX128, secondsOutsideLower, initializedLower) = (
+    //         lower.tickCumulativeOutside,
+    //         lower.secondsPerLiquidityOutsideX128,
+    //         lower.secondsOutside,
+    //         lower.initialized
+    //     );
+    //     require(initializedLower);
+
+    //     bool initializedUpper;
+    //     (tickCumulativeUpper, secondsPerLiquidityOutsideUpperX128, secondsOutsideUpper, initializedUpper) = (
+    //         upper.tickCumulativeOutside,
+    //         upper.secondsPerLiquidityOutsideX128,
+    //         upper.secondsOutside,
+    //         upper.initialized
+    //     );
+    //     require(initializedUpper);
+    // }
+
+    // Slot0 memory _slot0 = slot0;
+
+    // if (_slot0.tick < tickLower) {
+    //     return (
+    //         tickCumulativeLower - tickCumulativeUpper,
+    //         secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128,
+    //         secondsOutsideLower - secondsOutsideUpper
+    //     );
+    // } else if (_slot0.tick < tickUpper) {
+    //     uint32 time = _blockTimestamp();
+    //     (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observations.observeSingle(
+    //         time,
+    //         0,
+    //         _slot0.tick,
+    //         _slot0.observationIndex,
+    //         liquidity,
+    //         _slot0.observationCardinality
+    //     );
+    //     return (
+    //         tickCumulative - tickCumulativeLower - tickCumulativeUpper,
+    //         secondsPerLiquidityCumulativeX128 -
+    //             secondsPerLiquidityOutsideLowerX128 -
+    //             secondsPerLiquidityOutsideUpperX128,
+    //         time - secondsOutsideLower - secondsOutsideUpper
+    //     );
+    // } else {
+    //     return (
+    //         tickCumulativeUpper - tickCumulativeLower,
+    //         secondsPerLiquidityOutsideUpperX128 - secondsPerLiquidityOutsideLowerX128,
+    //         secondsOutsideUpper - secondsOutsideLower
+    //     );
+    // }
+}
+
+/// @inheritdoc IUniswapV3PoolDerivedState
+view observe(uint32[] calldata secondsAgos)
+    /* external
+    view
+    override
+    noDelegateCall
+    returns */ : {int[] /* int56[] memory tickCumulatives */, nat[] /* uint160[] memory secondsPerLiquidityCumulativeX128s */}
+{
+    // return
+    //     observations.observe(
+    //         _blockTimestamp(),
+    //         secondsAgos,
+    //         slot0.tick,
+    //         slot0.observationIndex,
+    //         liquidity,
+    //         slot0.observationCardinality
+    //     );
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+entry increaseObservationCardinalityNext(observationCardinalityNext: nat)
+    // external
+    // override
+    // lock
+    // noDelegateCall
+{
+    // uint16 observationCardinalityNextOld = slot0.observationCardinalityNext; // for the event
+    // uint16 observationCardinalityNextNew = observations.grow(
+    //     observationCardinalityNextOld,
+    //     observationCardinalityNext
+    // );
+    // slot0.observationCardinalityNext = observationCardinalityNextNew;
+    // if (observationCardinalityNextOld != observationCardinalityNextNew)
+    //     emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev not locked because it initializes unlocked
+entry initialize(sqrtPriceX96: nat) /* external override */ {
+    // require(slot0.sqrtPriceX96 == 0, 'AI');
+
+    // int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+
+    // (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(_blockTimestamp());
+
+    // slot0 = Slot0({
+    //     sqrtPriceX96: sqrtPriceX96,
+    //     tick: tick,
+    //     observationIndex: 0,
+    //     observationCardinality: cardinality,
+    //     observationCardinalityNext: cardinalityNext,
+    //     feeProtocol: 0,
+    //     unlocked: true
+    // });
+
+    // emit Initialize(sqrtPriceX96, tick);
+}
+
+record ModifyPositionParams {
+    // the address that owns the position
+    owner: address;
+    // the lower and upper tick of the position
+    tickLower: int;
+    tickUpper: int;
+    // any change in liquidity
+    liquidityDelta: int;
+}
+
+/// @dev Effect some changes to a position
+/// @param params the position details and the change to the position's liquidity to effect
+/// @return position a storage pointer referencing the position with the given owner and tick range
+/// @return amount0 the amount of token0 owed to the pool, negative if the pool should pay the recipient
+/// @return amount1 the amount of token1 owed to the pool, negative if the pool should pay the recipient
+getter _modifyPosition(params: ModifyPositionParams)
+    // private
+    // noDelegateCall
+    : {
+        Position.Info, /* Position.Info storage position */,
+        nat, /* int256 amount0 */,
+        nat, /* int256 amount1 */
+    }
+{
+    // checkTicks(params.tickLower, params.tickUpper);
+
+    // Slot0 memory _slot0 = slot0; // SLOAD for gas optimization
+
+    // position = _updatePosition(
+    //     params.owner,
+    //     params.tickLower,
+    //     params.tickUpper,
+    //     params.liquidityDelta,
+    //     _slot0.tick
+    // );
+
+    // if (params.liquidityDelta != 0) {
+    //     if (_slot0.tick < params.tickLower) {
+    //         // current tick is below the passed range; liquidity can only become in range by crossing from left to
+    //         // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
+    //         amount0 = SqrtPriceMath.getAmount0Delta(
+    //             TickMath.getSqrtRatioAtTick(params.tickLower),
+    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+    //             params.liquidityDelta
+    //         );
+    //     } else if (_slot0.tick < params.tickUpper) {
+    //         // current tick is inside the passed range
+    //         uint128 liquidityBefore = liquidity; // SLOAD for gas optimization
+
+    //         // write an oracle entry
+    //         (slot0.observationIndex, slot0.observationCardinality) = observations.write(
+    //             _slot0.observationIndex,
+    //             _blockTimestamp(),
+    //             _slot0.tick,
+    //             liquidityBefore,
+    //             _slot0.observationCardinality,
+    //             _slot0.observationCardinalityNext
+    //         );
+
+    //         amount0 = SqrtPriceMath.getAmount0Delta(
+    //             _slot0.sqrtPriceX96,
+    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+    //             params.liquidityDelta
+    //         );
+    //         amount1 = SqrtPriceMath.getAmount1Delta(
+    //             TickMath.getSqrtRatioAtTick(params.tickLower),
+    //             _slot0.sqrtPriceX96,
+    //             params.liquidityDelta
+    //         );
+
+    //         liquidity = LiquidityMath.addDelta(liquidityBefore, params.liquidityDelta);
+    //     } else {
+    //         // current tick is above the passed range; liquidity can only become in range by crossing from right to
+    //         // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
+    //         amount1 = SqrtPriceMath.getAmount1Delta(
+    //             TickMath.getSqrtRatioAtTick(params.tickLower),
+    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+    //             params.liquidityDelta
+    //         );
+    //     }
+    // }
+}
+
+/// @dev Gets and updates a position with the given liquidity delta
+/// @param owner the owner of the position
+/// @param tickLower the lower tick of the position's tick range
+/// @param tickUpper the upper tick of the position's tick range
+/// @param tick the current tick, passed to avoid sloads
+getter _updatePosition(
+    owner: address,
+    tickLower: int,
+    tickUpper: int,
+    liquidityDelta: int,
+    tick: int
+) /* private returns */ : Position.Info /* storage position */ {
+    // position = positions.get(owner, tickLower, tickUpper);
+
+    // uint256 _feeGrowthGlobal0X128 = feeGrowthGlobal0X128; // SLOAD for gas optimization
+    // uint256 _feeGrowthGlobal1X128 = feeGrowthGlobal1X128; // SLOAD for gas optimization
+
+    // // if we need to update the ticks, do it
+    // bool flippedLower;
+    // bool flippedUpper;
+    // if (liquidityDelta != 0) {
+    //     uint32 time = _blockTimestamp();
+    //     (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observations.observeSingle(
+    //         time,
+    //         0,
+    //         slot0.tick,
+    //         slot0.observationIndex,
+    //         liquidity,
+    //         slot0.observationCardinality
+    //     );
+
+    //     flippedLower = ticks.update(
+    //         tickLower,
+    //         tick,
+    //         liquidityDelta,
+    //         _feeGrowthGlobal0X128,
+    //         _feeGrowthGlobal1X128,
+    //         secondsPerLiquidityCumulativeX128,
+    //         tickCumulative,
+    //         time,
+    //         false,
+    //         maxLiquidityPerTick
+    //     );
+    //     flippedUpper = ticks.update(
+    //         tickUpper,
+    //         tick,
+    //         liquidityDelta,
+    //         _feeGrowthGlobal0X128,
+    //         _feeGrowthGlobal1X128,
+    //         secondsPerLiquidityCumulativeX128,
+    //         tickCumulative,
+    //         time,
+    //         true,
+    //         maxLiquidityPerTick
+    //     );
+
+    //     if (flippedLower) {
+    //         tickBitmap.flipTick(tickLower, tickSpacing);
+    //     }
+    //     if (flippedUpper) {
+    //         tickBitmap.flipTick(tickUpper, tickSpacing);
+    //     }
+    // }
+
+    // (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = ticks.getFeeGrowthInside(
+    //     tickLower,
+    //     tickUpper,
+    //     tick,
+    //     _feeGrowthGlobal0X128,
+    //     _feeGrowthGlobal1X128
+    // );
+
+    // position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
+
+    // // clear any tick data that is no longer needed
+    // if (liquidityDelta < 0) {
+    //     if (flippedLower) {
+    //         ticks.clear(tickLower);
+    //     }
+    //     if (flippedUpper) {
+    //         ticks.clear(tickUpper);
+    //     }
+    // }
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev noDelegateCall is applied indirectly via _modifyPosition
+getter mint(
+    /* address */ recipient: address,
+    /* int24 */ tickLower: int,
+    /* int24 */ tickUpper: int,
+    /* uint128 */ amount: nat,
+    /* bytes calldata */ data: bytes
+) /* external override lock returns */ : (nat /* uint256 amount0 */, nat /* uint256 amount1 */) {
+    // require(amount > 0);
+    // (, int256 amount0Int, int256 amount1Int) = _modifyPosition(
+    //     ModifyPositionParams({
+    //         owner: recipient,
+    //         tickLower: tickLower,
+    //         tickUpper: tickUpper,
+    //         liquidityDelta: int256(amount).toInt128()
+    //     })
+    // );
+
+    // amount0 = uint256(amount0Int);
+    // amount1 = uint256(amount1Int);
+
+    // uint256 balance0Before;
+    // uint256 balance1Before;
+    // if (amount0 > 0) balance0Before = balance0();
+    // if (amount1 > 0) balance1Before = balance1();
+    // IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(amount0, amount1, data);
+    // if (amount0 > 0) require(balance0Before.add(amount0) <= balance0(), 'M0');
+    // if (amount1 > 0) require(balance1Before.add(amount1) <= balance1(), 'M1');
+
+    // emit Mint(msg.sender, recipient, tickLower, tickUpper, amount, amount0, amount1);
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+getter collect(
+    /* address */ recipient: address,
+    /* int24 */ tickLower: int,
+    /* int24 */ tickUpper: int,
+    /* uint128 */ amount0Requested: nat,
+    /* uint128 */ amount1Requested: nat
+) /* external override lock returns */ : {nat, nat} /* (uint128 amount0, uint128 amount1) */ {
+    // // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
+    // Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
+
+    // amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
+    // amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
+
+    // if (amount0 > 0) {
+    //     position.tokensOwed0 -= amount0;
+    //     TransferHelper.safeTransfer(token0, recipient, amount0);
+    // }
+    // if (amount1 > 0) {
+    //     position.tokensOwed1 -= amount1;
+    //     TransferHelper.safeTransfer(token1, recipient, amount1);
+    // }
+
+    // emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev noDelegateCall is applied indirectly via _modifyPosition
+getter burn(
+    /* int24 */ tickLower: int,
+    /* int24 */ tickUpper: int,
+    /* uint128 */ amount: nat
+) /* external override lock returns */ : {nat, nat} /* (uint256 amount0, uint256 amount1) */ {
+    // (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
+    //     ModifyPositionParams({
+    //         owner: msg.sender,
+    //         tickLower: tickLower,
+    //         tickUpper: tickUpper,
+    //         liquidityDelta: -int256(amount).toInt128()
+    //     })
+    // );
+
+    // amount0 = uint256(-amount0Int);
+    // amount1 = uint256(-amount1Int);
+
+    // if (amount0 > 0 || amount1 > 0) {
+    //     (position.tokensOwed0, position.tokensOwed1) = (
+    //         position.tokensOwed0 + uint128(amount0),
+    //         position.tokensOwed1 + uint128(amount1)
+    //     );
+    // }
+
+    // emit Burn(msg.sender, tickLower, tickUpper, amount, amount0, amount1);
+}
+
+record SwapCache {
+    // the protocol fee for the input token
+    feeProtocol: nat;
+    // liquidity at the beginning of the swap
+    liquidityStart: nat;
+    // the timestamp of the current block
+    blockTimestamp: nat;
+    // the current value of the tick accumulator, computed only if we cross an initialized tick
+    tickCumulative: int;
+    // the current value of seconds per liquidity accumulator, computed only if we cross an initialized tick
+    secondsPerLiquidityCumulativeX128: nat;
+    // whether we've computed and cached the above two accumulators
+    computedLatestObservation: bool;
+}
+
+// the top level state of the swap, the results of which are recorded in storage at the end
+record SwapState {
+    // the amount remaining to be swapped in/out of the input/output asset
+    amountSpecifiedRemaining: int;
+    // the amount already swapped out/in of the output/input asset
+    amountCalculated: int;
+    // current sqrt(price)
+    sqrtPriceX96: nat;
+    // the tick associated with the current price
+    tick: int;
+    // the global fee growth of the input token
+    feeGrowthGlobalX128: nat;
+    // amount of input token paid as protocol fee
+    protocolFee: nat;
+    // the current liquidity in range
+    liquidity: nat;
+}
+
+record StepComputations {
+    // the price at the beginning of the step
+    sqrtPriceStartX96: nat;
+    // the next tick to swap to from the current tick in the swap direction
+    tickNext: int;
+    // whether tickNext is initialized or not
+    %initialized: bool;
+    // sqrt(price) for the next tick (1/0)
+    sqrtPriceNextX96: nat;
+    // how much is being swapped in in this step
+    amountIn: nat;
+    // how much is being swapped out
+    amountOut: nat;
+    // how much fee is being paid in
+    feeAmount: nat;
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+getter swap(
+    /* address */ recipient: address,
+    /* bool */ zeroForOne: bool,
+    /* int256 */ amountSpecified: int,
+    /* uint160 */ sqrtPriceLimitX96: nat,
+    /* bytes calldata */ data: bytes
+) /* external override noDelegateCall returns */ : {int, int} /* (int256 amount0, int256 amount1) */ {
+    // require(amountSpecified != 0, 'AS');
+
+    // Slot0 memory slot0Start = slot0;
+
+    // require(slot0Start.unlocked, 'LOK');
+    // require(
+    //     zeroForOne
+    //         ? sqrtPriceLimitX96 < slot0Start.sqrtPriceX96 && sqrtPriceLimitX96 > TickMath.MIN_SQRT_RATIO
+    //         : sqrtPriceLimitX96 > slot0Start.sqrtPriceX96 && sqrtPriceLimitX96 < TickMath.MAX_SQRT_RATIO,
+    //     'SPL'
+    // );
+
+    // slot0.unlocked = false;
+
+    // SwapCache memory cache = SwapCache({
+    //     liquidityStart: liquidity,
+    //     blockTimestamp: _blockTimestamp(),
+    //     feeProtocol: zeroForOne ? (slot0Start.feeProtocol % 16) : (slot0Start.feeProtocol >> 4),
+    //     secondsPerLiquidityCumulativeX128: 0,
+    //     tickCumulative: 0,
+    //     computedLatestObservation: false
+    // });
+
+    // bool exactInput = amountSpecified > 0;
+
+    // SwapState memory state = SwapState({
+    //     amountSpecifiedRemaining: amountSpecified,
+    //     amountCalculated: 0,
+    //     sqrtPriceX96: slot0Start.sqrtPriceX96,
+    //     tick: slot0Start.tick,
+    //     feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
+    //     protocolFee: 0,
+    //     liquidity: cache.liquidityStart
+    // });
+
+    // // continue swapping as long as we haven't used the entire input/output and haven't reached the price limit
+    // while (state.amountSpecifiedRemaining != 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
+    //     StepComputations memory step;
+
+    //     step.sqrtPriceStartX96 = state.sqrtPriceX96;
+
+    //     (step.tickNext, step.initialized) = tickBitmap.nextInitializedTickWithinOneWord(
+    //         state.tick,
+    //         tickSpacing,
+    //         zeroForOne
+    //     );
+
+    //     // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
+    //     if (step.tickNext < TickMath.MIN_TICK) {
+    //         step.tickNext = TickMath.MIN_TICK;
+    //     } else if (step.tickNext > TickMath.MAX_TICK) {
+    //         step.tickNext = TickMath.MAX_TICK;
+    //     }
+
+    //     // get the price for the next tick
+    //     step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.tickNext);
+
+    //     // compute values to swap to the target tick, price limit, or point where input/output amount is exhausted
+    //     (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) = SwapMath.computeSwapStep(
+    //         state.sqrtPriceX96,
+    //         (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
+    //             ? sqrtPriceLimitX96
+    //             : step.sqrtPriceNextX96,
+    //         state.liquidity,
+    //         state.amountSpecifiedRemaining,
+    //         fee
+    //     );
+
+    //     if (exactInput) {
+    //         state.amountSpecifiedRemaining -= (step.amountIn + step.feeAmount).toInt256();
+    //         state.amountCalculated = state.amountCalculated.sub(step.amountOut.toInt256());
+    //     } else {
+    //         state.amountSpecifiedRemaining += step.amountOut.toInt256();
+    //         state.amountCalculated = state.amountCalculated.add((step.amountIn + step.feeAmount).toInt256());
+    //     }
+
+    //     // if the protocol fee is on, calculate how much is owed, decrement feeAmount, and increment protocolFee
+    //     if (cache.feeProtocol > 0) {
+    //         uint256 delta = step.feeAmount / cache.feeProtocol;
+    //         step.feeAmount -= delta;
+    //         state.protocolFee += uint128(delta);
+    //     }
+
+    //     // update global fee tracker
+    //     if (state.liquidity > 0)
+    //         state.feeGrowthGlobalX128 += FullMath.mulDiv(step.feeAmount, FixedPoint128.Q128, state.liquidity);
+
+    //     // shift tick if we reached the next price
+    //     if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
+    //         // if the tick is initialized, run the tick transition
+    //         if (step.initialized) {
+    //             // check for the placeholder value, which we replace with the actual value the first time the swap
+    //             // crosses an initialized tick
+    //             if (!cache.computedLatestObservation) {
+    //                 (cache.tickCumulative, cache.secondsPerLiquidityCumulativeX128) = observations.observeSingle(
+    //                     cache.blockTimestamp,
+    //                     0,
+    //                     slot0Start.tick,
+    //                     slot0Start.observationIndex,
+    //                     cache.liquidityStart,
+    //                     slot0Start.observationCardinality
+    //                 );
+    //                 cache.computedLatestObservation = true;
+    //             }
+    //             int128 liquidityNet = ticks.cross(
+    //                 step.tickNext,
+    //                 (zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
+    //                 (zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128),
+    //                 cache.secondsPerLiquidityCumulativeX128,
+    //                 cache.tickCumulative,
+    //                 cache.blockTimestamp
+    //             );
+    //             // if we're moving leftward, we interpret liquidityNet as the opposite sign
+    //             // safe because liquidityNet cannot be type(int128).min
+    //             if (zeroForOne) liquidityNet = -liquidityNet;
+
+    //             state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
+    //         }
+
+    //         state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
+    //     } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
+    //         // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
+    //         state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
+    //     }
+    // }
+
+    // // update tick and write an oracle entry if the tick change
+    // if (state.tick != slot0Start.tick) {
+    //     (uint16 observationIndex, uint16 observationCardinality) = observations.write(
+    //         slot0Start.observationIndex,
+    //         cache.blockTimestamp,
+    //         slot0Start.tick,
+    //         cache.liquidityStart,
+    //         slot0Start.observationCardinality,
+    //         slot0Start.observationCardinalityNext
+    //     );
+    //     (slot0.sqrtPriceX96, slot0.tick, slot0.observationIndex, slot0.observationCardinality) = (
+    //         state.sqrtPriceX96,
+    //         state.tick,
+    //         observationIndex,
+    //         observationCardinality
+    //     );
+    // } else {
+    //     // otherwise just update the price
+    //     slot0.sqrtPriceX96 = state.sqrtPriceX96;
+    // }
+
+    // // update liquidity if it changed
+    // if (cache.liquidityStart != state.liquidity) liquidity = state.liquidity;
+
+    // // update fee growth global and, if necessary, protocol fees
+    // // overflow is acceptable, protocol has to withdraw before it hits type(uint128).max fees
+    // if (zeroForOne) {
+    //     feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
+    //     if (state.protocolFee > 0) protocolFees.token0 += state.protocolFee;
+    // } else {
+    //     feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
+    //     if (state.protocolFee > 0) protocolFees.token1 += state.protocolFee;
+    // }
+
+    // (amount0, amount1) = zeroForOne == exactInput
+    //     ? (amountSpecified - state.amountSpecifiedRemaining, state.amountCalculated)
+    //     : (state.amountCalculated, amountSpecified - state.amountSpecifiedRemaining);
+
+    // // do the transfers and collect payment
+    // if (zeroForOne) {
+    //     if (amount1 < 0) TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
+
+    //     uint256 balance0Before = balance0();
+    //     IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+    //     require(balance0Before.add(uint256(amount0)) <= balance0(), 'IIA');
+    // } else {
+    //     if (amount0 < 0) TransferHelper.safeTransfer(token0, recipient, uint256(-amount0));
+
+    //     uint256 balance1Before = balance1();
+    //     IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+    //     require(balance1Before.add(uint256(amount1)) <= balance1(), 'IIA');
+    // }
+
+    // emit Swap(msg.sender, recipient, amount0, amount1, state.sqrtPriceX96, state.liquidity, state.tick);
+    // slot0.unlocked = true;
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+entry flash(
+    /* address */ recipient: address,
+    /* uint256 */ amount0: nat,
+    /* uint256 */ amount1: nat,
+    /* bytes calldata */ data: bytes
+) /* external override lock noDelegateCall */ {
+    // uint128 _liquidity = liquidity;
+    // require(_liquidity > 0, 'L');
+
+    // uint256 fee0 = FullMath.mulDivRoundingUp(amount0, fee, 1e6);
+    // uint256 fee1 = FullMath.mulDivRoundingUp(amount1, fee, 1e6);
+    // uint256 balance0Before = balance0();
+    // uint256 balance1Before = balance1();
+
+    // if (amount0 > 0) TransferHelper.safeTransfer(token0, recipient, amount0);
+    // if (amount1 > 0) TransferHelper.safeTransfer(token1, recipient, amount1);
+
+    // IUniswapV3FlashCallback(msg.sender).uniswapV3FlashCallback(fee0, fee1, data);
+
+    // uint256 balance0After = balance0();
+    // uint256 balance1After = balance1();
+
+    // require(balance0Before.add(fee0) <= balance0After, 'F0');
+    // require(balance1Before.add(fee1) <= balance1After, 'F1');
+
+    // // sub is safe because we know balanceAfter is gt balanceBefore by at least fee
+    // uint256 paid0 = balance0After - balance0Before;
+    // uint256 paid1 = balance1After - balance1Before;
+
+    // if (paid0 > 0) {
+    //     uint8 feeProtocol0 = slot0.feeProtocol % 16;
+    //     uint256 fees0 = feeProtocol0 == 0 ? 0 : paid0 / feeProtocol0;
+    //     if (uint128(fees0) > 0) protocolFees.token0 += uint128(fees0);
+    //     feeGrowthGlobal0X128 += FullMath.mulDiv(paid0 - fees0, FixedPoint128.Q128, _liquidity);
+    // }
+    // if (paid1 > 0) {
+    //     uint8 feeProtocol1 = slot0.feeProtocol >> 4;
+    //     uint256 fees1 = feeProtocol1 == 0 ? 0 : paid1 / feeProtocol1;
+    //     if (uint128(fees1) > 0) protocolFees.token1 += uint128(fees1);
+    //     feeGrowthGlobal1X128 += FullMath.mulDiv(paid1 - fees1, FixedPoint128.Q128, _liquidity);
+    // }
+
+    // emit Flash(msg.sender, recipient, amount0, amount1, paid0, paid1);
+}
+
+/// @inheritdoc IUniswapV3PoolOwnerActions
+entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override lock onlyFactoryOwner */ {
+    // require(
+    //     (feeProtocol0 == 0 || (feeProtocol0 >= 4 && feeProtocol0 <= 10)) &&
+    //         (feeProtocol1 == 0 || (feeProtocol1 >= 4 && feeProtocol1 <= 10))
+    // );
+    // uint8 feeProtocolOld = slot0.feeProtocol;
+    // slot0.feeProtocol = feeProtocol0 + (feeProtocol1 << 4);
+    // emit SetFeeProtocol(feeProtocolOld % 16, feeProtocolOld >> 4, feeProtocol0, feeProtocol1);
+}
+
+/// @inheritdoc IUniswapV3PoolOwnerActions
+getter collectProtocol(
+    /* address */ recipient: address,
+    /* uint128 */ amount0Requested: nat,
+    /* uint128 */ amount1Requested: nat
+) /* external override lock onlyFactoryOwner returns (uint128 amount0, uint128 amount1) */ : {nat, nat} {
+    // amount0 = amount0Requested > protocolFees.token0 ? protocolFees.token0 : amount0Requested;
+    // amount1 = amount1Requested > protocolFees.token1 ? protocolFees.token1 : amount1Requested;
+
+    // if (amount0 > 0) {
+    //     if (amount0 == protocolFees.token0) amount0--; // ensure that the slot is not cleared, for gas savings
+    //     protocolFees.token0 -= amount0;
+    //     TransferHelper.safeTransfer(token0, recipient, amount0);
+    // }
+    // if (amount1 > 0) {
+    //     if (amount1 == protocolFees.token1) amount1--; // ensure that the slot is not cleared, for gas savings
+    //     protocolFees.token1 -= amount1;
+    //     TransferHelper.safeTransfer(token1, recipient, amount1);
+    // }
+
+    // emit CollectProtocol(msg.sender, recipient, amount0, amount1);
+}
