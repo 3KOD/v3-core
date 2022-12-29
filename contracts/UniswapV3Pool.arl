@@ -33,19 +33,19 @@ import IUniswapV3FlashCallback from "./interfaces/callback/IUniswapV3FlashCallba
 // using Oracle for Oracle.Observation[65535];
 
 /// @inheritdoc IUniswapV3PoolImmutables
-variable factory : address;
+variable factory : address
 /// @inheritdoc IUniswapV3PoolImmutables
-variable token0 : address;
+variable token0 : address
 /// @inheritdoc IUniswapV3PoolImmutables
-variable token1 : address;
+variable token1 : address
 /// @inheritdoc IUniswapV3PoolImmutables
-variable fee : nat;
+variable fee : nat
 
 /// @inheritdoc IUniswapV3PoolImmutables
-variable tickSpacing : int;
+variable tickSpacing : int
 
 /// @inheritdoc IUniswapV3PoolImmutables
-variable maxLiquidityPerTick : nat;
+variable maxLiquidityPerTick : nat
 
 /// @inheritdoc IUniswapV3PoolState
 asset slot0 {
@@ -67,9 +67,9 @@ asset slot0 {
 }
 
 /// @inheritdoc IUniswapV3PoolState
-variable feeGrowthGlobal0X128 : nat;
+variable feeGrowthGlobal0X128 : nat
 /// @inheritdoc IUniswapV3PoolState
-variable feeGrowthGlobal1X128 : nat;
+variable feeGrowthGlobal1X128 : nat
 
 // accumulated protocol fees in token0/token1 units
 /// @inheritdoc IUniswapV3PoolState
@@ -79,7 +79,7 @@ asset protocolFees {
 }
 
 /// @inheritdoc IUniswapV3PoolState
-variable liquidity : nat;
+variable liquidity : nat
 
 /// @inheritdoc IUniswapV3PoolState
 asset ticks identified by tickId to big_map {

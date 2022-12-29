@@ -1,10 +1,27 @@
 
-archetype UniswapV3Factory(owner: address = caller)
+archetype UniswapV3Factory(owner: address = caller, original: address = self_address)
 
-import IUniswapV3Factory from "./interfaces/IUniswapV3Factory.tz"
 import UniswapV3PoolDeployer from "./UniswapV3PoolDeployer.tz"
 import NoDelegateCall from "./NoDelegateCall.tz"
 import UniswapV3Pool from "./UniswapV3Pool.tz"
+
+event OwnerChanged {
+    oldOwner: address;
+    newOwner: address
+}
+
+event PoolCreated {
+    token0: address;
+    token1: address;
+    fee: nat;
+    tickSpacing: int;
+    pool: address
+}
+
+event FeeAmountEnabled {
+    fee: nat;
+    tickSpacing: int
+}
 
 /// @inheritdoc IUniswapV3Factory
 asset feeAmountTickSpacing identified by fee to big_map {
@@ -23,8 +40,38 @@ asset getPool identified by token0 token1 feeOfGetPool to big_map {
     pool: address;
 }
 
-getter createPool(tokenA: address, tokenB: address, fee: nat) : address {}
+entry createPool(tokenA: address, tokenB: address, fee_: nat, callback : contract<address>) {
+    require {
+        r: self_address = original;
+    }
 
-entry setOwner(_owner: address) {}
+    effect {
+        transfer transferred to entry callback(original)
+    }
+}
 
-entry enableFeeAmount(fee: nat, tickSpacing: int) {}
+entry setOwner(owner_: address) {
+    called by owner
+
+    effect {
+        emit<OwnerChanged>({owner; owner_});
+        owner := owner_
+    }
+}
+
+entry enableFeeAmount(fee_: nat, tickSpacing_: int) {
+    called by owner
+
+    require {
+        r1: fee_ < 1000000;
+        r2: tickSpacing_ > 0;
+        r3: tickSpacing_ < 16384;
+        r4: feeAmountTickSpacing[fee_].tickSpacing = 0;
+    }
+
+    effect {
+        feeAmountTickSpacing.add_update(fee_, { tickSpacing := tickSpacing_ });
+        emit<FeeAmountEnabled>({fee_; tickSpacing_})
+    }
+
+}
