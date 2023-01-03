@@ -1,9 +1,12 @@
 
-archetype UniswapV3Factory(owner: address = caller, original: address = self_address)
+// owner = caller
+archetype UniswapV3Factory(owner: address)
 
 // import UniswapV3PoolDeployer from "./UniswapV3PoolDeployer.tz"
 // import NoDelegateCall from "./NoDelegateCall.tz"
 // import UniswapV3Pool from "./UniswapV3Pool.tz"
+
+constant  original: address = self_address
 
 event OwnerChanged {
     oldOwner: address;
