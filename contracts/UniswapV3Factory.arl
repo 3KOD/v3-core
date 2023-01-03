@@ -1,9 +1,9 @@
 
 archetype UniswapV3Factory(owner: address = caller, original: address = self_address)
 
-import UniswapV3PoolDeployer from "./UniswapV3PoolDeployer.tz"
-import NoDelegateCall from "./NoDelegateCall.tz"
-import UniswapV3Pool from "./UniswapV3Pool.tz"
+// import UniswapV3PoolDeployer from "./UniswapV3PoolDeployer.tz"
+// import NoDelegateCall from "./NoDelegateCall.tz"
+// import UniswapV3Pool from "./UniswapV3Pool.tz"
 
 event OwnerChanged {
     oldOwner: address;
@@ -40,15 +40,15 @@ asset getPool identified by token0 token1 feeOfGetPool to big_map {
     pool: address;
 }
 
-entry createPool(tokenA: address, tokenB: address, fee_: nat, callback : contract<address>) {
-    require {
-        r: self_address = original;
-    }
+// entry createPool(tokenA: address, tokenB: address, fee_: nat, callback : contract<address>) {
+//     require {
+//         r: self_address = original;
+//     }
 
-    effect {
-        transfer transferred to entry callback(original)
-    }
-}
+//     effect {
+//         transfer transferred to entry callback(original)
+//     }
+// }
 
 entry setOwner(owner_: address) {
     called by owner
