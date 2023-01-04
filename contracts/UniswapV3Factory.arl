@@ -1,7 +1,7 @@
 // owner = caller
 archetype UniswapV3Factory(owner: address)
 
-// import UniswapV3Pool from "UniswapV3Pool.tz"
+import UniswapV3Pool from "./contracts/UniswapV3Pool.arl"
 
 constant original: address = self_address
 
@@ -77,9 +77,9 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
 
         /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
         /// clearing it after deploying the pool.
-        // const delegate : option<key_hash> = none;
-        // const amount : tez = 0tz;
-        // const storage_init : nat = 0;
+        const delegate : option<key_hash> = none;
+        const amount : tez = 0tz;
+        const storage_init : nat = 0;
         // const op_addr : (operation * address) = create_contract(UniswapV3Pool, delegate, amount, storage_init);
         // operations := [op_addr[0]];
 
