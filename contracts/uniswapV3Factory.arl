@@ -1,7 +1,7 @@
 // owner = caller
-archetype UniswapV3Factory(owner: address)
+archetype uniswapV3Factory(owner: address)
 
-import UniswapV3Pool from "./contracts/UniswapV3Pool.arl"
+import uniswapV3Pool from "./contracts/michelson/uniswapV3Pool.tz"
 
 constant original: address = self_address
 
