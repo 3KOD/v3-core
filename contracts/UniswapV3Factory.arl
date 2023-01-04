@@ -1,12 +1,9 @@
-
 // owner = caller
 archetype UniswapV3Factory(owner: address)
 
-// import UniswapV3PoolDeployer from "./UniswapV3PoolDeployer.tz"
-// import NoDelegateCall from "./NoDelegateCall.tz"
-// import UniswapV3Pool from "./UniswapV3Pool.tz"
+// import UniswapV3Pool from "UniswapV3Pool.tz"
 
-constant  original: address = self_address
+constant original: address = self_address
 
 event OwnerChanged {
     oldOwner: address;
@@ -59,20 +56,12 @@ variable parameters: Parameters = {
     0
 }
 
-entry deploy(
-    factory_: address, 
-    token0_: address, 
-    token1_: address, 
-    fee_: nat,
-    tickSpacing_: int
-) /* internal */ {}
-
 function noDelegateCall() : bool {
-    do_fail_if(self_address = original, "");
+    do_fail_if(self_address = original, ("DelegateCall", original));
     return true
 }
 
-entry createPool(tokenA: address, tokenB: address, fee_: nat, callback : contract<address>) {
+entry createPool(tokenA: address, tokenB: address, fee_: nat) {
     require {
         createPool1: noDelegateCall();
         createPool2: tokenA <> tokenB;
@@ -84,8 +73,19 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat, callback : contrac
         do_require(token0_cp <> @0, ("INVALID_ADDRESS", token0_cp));
         var tickSpacing_cp = feeAmountTickSpacing[fee_].tickSpacing;
         do_require(tickSpacing_cp <> 0, ("INVALID_TICK_SPACING", tickSpacing_cp));
-        // do_require(getPool[token0_cp][token1_cp][fee_].pool <> 0, ("INVALID_GET_POOL", getPool));
-        transfer transferred to entry callback(original)
+        do_require(getPool[(token0_cp, token1_cp, fee_)].pool <> @0, ("INVALID_GET_POOL", getPool));
+
+        /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
+        /// clearing it after deploying the pool.
+        // const delegate : option<key_hash> = none;
+        // const amount : tez = 0tz;
+        // const storage_init : nat = 0;
+        // const op_addr : (operation * address) = create_contract(UniswapV3Pool, delegate, amount, storage_init);
+        // operations := [op_addr[0]];
+
+        // getPool[(token0_cp, token1_cp, fee_)].pool := op_addr[1];
+        // getPool[(token1_cp, token0_cp, fee_)].pool := op_addr[1];
+        // emit<PoolCreated>({token0_cp; token1_cp; fee_; tickSpacing_cp; op_addr[1]})
     }
 }
 
