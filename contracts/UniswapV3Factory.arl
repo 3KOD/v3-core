@@ -43,15 +43,51 @@ asset getPool identified by token0 token1 feeOfGetPool to big_map {
     pool: address;
 }
 
-// entry createPool(tokenA: address, tokenB: address, fee_: nat, callback : contract<address>) {
-//     require {
-//         r: self_address = original;
-//     }
+record Parameters {
+    para_factory: address;
+    para_token0: address;
+    para_token1: address;
+    para_fee: nat;
+    para_tickSpacing: int;
+}
 
-//     effect {
-//         transfer transferred to entry callback(original)
-//     }
-// }
+variable parameters: Parameters = {
+    @0;
+    @0;
+    @0;
+    0;
+    0
+}
+
+entry deploy(
+    factory_: address, 
+    token0_: address, 
+    token1_: address, 
+    fee_: nat,
+    tickSpacing_: int
+) /* internal */ {}
+
+function noDelegateCall() : bool {
+    do_fail_if(self_address = original, "");
+    return true
+}
+
+entry createPool(tokenA: address, tokenB: address, fee_: nat, callback : contract<address>) {
+    require {
+        createPool1: noDelegateCall();
+        createPool2: tokenA <> tokenB;
+    }
+
+    effect {
+        var token0_cp = tokenA < tokenB ? tokenA : tokenB;
+        var token1_cp = tokenA < tokenB ? tokenB : tokenA;
+        do_require(token0_cp <> @0, ("INVALID_ADDRESS", token0_cp));
+        var tickSpacing_cp = feeAmountTickSpacing[fee_].tickSpacing;
+        do_require(tickSpacing_cp <> 0, ("INVALID_TICK_SPACING", tickSpacing_cp));
+        // do_require(getPool[token0_cp][token1_cp][fee_].pool <> 0, ("INVALID_GET_POOL", getPool));
+        transfer transferred to entry callback(original)
+    }
+}
 
 entry setOwner(owner_: address) {
     called by owner
@@ -66,10 +102,10 @@ entry enableFeeAmount(fee_: nat, tickSpacing_: int) {
     called by owner
 
     require {
-        r1: fee_ < 1000000;
-        r2: tickSpacing_ > 0;
-        r3: tickSpacing_ < 16384;
-        r4: feeAmountTickSpacing[fee_].tickSpacing = 0;
+        enableFeeAmount1: fee_ < 1000000;
+        enableFeeAmount2: tickSpacing_ > 0;
+        enableFeeAmount3: tickSpacing_ < 16384;
+        enableFeeAmount4: feeAmountTickSpacing[fee_].tickSpacing = 0;
     }
 
     effect {
