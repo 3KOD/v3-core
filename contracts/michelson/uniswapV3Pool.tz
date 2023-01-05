@@ -1,13 +1,25 @@
 # None
 {
   storage (option address);
-  parameter (address %testfunc);
+  parameter (or (or (address %testfunc) (address %testfunc1)) (unit %default));
   code { UNPAIR;
-         DUP;
-         SOME;
-         DIP { DIG 1; DROP };
-         DUG 1;
-         DROP;
-         NIL operation;
-         PAIR };
+         IF_LEFT
+           { IF_LEFT
+               { DUP;
+                 SOME;
+                 DIP { DIG 1; DROP };
+                 DUG 1;
+                 DROP;
+                 NIL operation;
+                 PAIR }
+               { DUP;
+                 SOME;
+                 DIP { DIG 1; DROP };
+                 DUG 1;
+                 DROP;
+                 NIL operation;
+                 PAIR } }
+           { DROP;
+             NIL operation;
+             PAIR } };
 }

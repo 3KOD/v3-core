@@ -105,7 +105,7 @@ entry enableFeeAmount(fee_: nat, tickSpacing_: int) {
         enableFeeAmount1: fee_ < 1000000;
         enableFeeAmount2: tickSpacing_ > 0;
         enableFeeAmount3: tickSpacing_ < 16384;
-        enableFeeAmount4: feeAmountTickSpacing[fee_].tickSpacing = 0;
+        enableFeeAmount4: is_none(feeAmountTickSpacing[fee_]?.tickSpacing);
     }
 
     effect {

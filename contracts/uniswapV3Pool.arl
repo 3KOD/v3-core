@@ -37,6 +37,10 @@ variable factory : option<address> = none
 entry testfunc(addr: address) {
     factory := some(addr);
 }
+entry testfunc1(addr: address) {
+    factory := some(addr);
+}
+entry default() {}
 // /// @inheritdoc IUniswapV3PoolImmutables
 // variable token0 : address = @KT1000000000000000000000000000000000
 // /// @inheritdoc IUniswapV3PoolImmutables
