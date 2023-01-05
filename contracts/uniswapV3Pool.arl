@@ -33,11 +33,14 @@ archetype uniswapV3Pool
 // using Oracle for Oracle.Observation[65535];
 
 /// @inheritdoc IUniswapV3PoolImmutables
-// variable factory : address = @0
+variable factory : option<address> = none
+entry testfunc(addr: address) {
+    factory := some(addr);
+}
 // /// @inheritdoc IUniswapV3PoolImmutables
-// variable token0 : address = @0
+// variable token0 : address = @KT1000000000000000000000000000000000
 // /// @inheritdoc IUniswapV3PoolImmutables
-// variable token1 : address = @0
+// variable token1 : address = @KT1000000000000000000000000000000000
 // /// @inheritdoc IUniswapV3PoolImmutables
 // variable fee : nat = 0
 

@@ -1,8 +1,13 @@
-# Unit
+# None
 {
-  storage unit;
-  parameter unit;
-  code { CDR;
+  storage (option address);
+  parameter (address %testfunc);
+  code { UNPAIR;
+         DUP;
+         SOME;
+         DIP { DIG 1; DROP };
+         DUG 1;
+         DROP;
          NIL operation;
          PAIR };
 }
