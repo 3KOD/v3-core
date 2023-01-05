@@ -57,7 +57,7 @@ variable parameters: Parameters = {
 }
 
 function noDelegateCall() : bool {
-    do_fail_if(self_address = original, ("DelegateCall", original));
+    do_fail_if(self_address <> original, ("DelegateCall", original));
     return true
 }
 
@@ -73,7 +73,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
         // do_require(token0_cp <> none, ("INVALID_ADDRESS", token0_cp));
         var tickSpacing_cp = feeAmountTickSpacing[fee_].tickSpacing;
         do_require(tickSpacing_cp <> 0, ("INVALID_TICK_SPACING", tickSpacing_cp));
-        do_require(is_some(getPool[(token0_cp, token1_cp, fee_)].pool), ("INVALID_GET_POOL", getPool[(token0_cp, token1_cp, fee_)].pool));
+        do_require(is_none(getPool[(token0_cp, token1_cp, fee_)]?.pool), ("INVALID_GET_POOL", getPool[(token0_cp, token1_cp, fee_)].pool));
 
         // /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
         // /// clearing it after deploying the pool.
