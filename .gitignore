@@ -105,3 +105,4 @@ dist
 
 tests/binding
 contracts/.completium
+.vscode
