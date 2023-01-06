@@ -151,22 +151,15 @@ record Observation {
 // Oracle.Observation[65535] public override observations;
 variable observations: list<Observation> = []
 
-// /// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
-// /// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
-// /// we use balance checks to determine the payment status of interactions such as mint, swap and flash.
-// function startLock(): bool {
-//     return true
+/// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
+/// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
+/// we use balance checks to determine the payment status of interactions such as mint, swap and flash.
+// modifier lock() {
+//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+//     slot0.unlocked = false;
+//     _;
+//     slot0.unlocked = true;
 // }
-
-// // function endLock() {
-
-// // }
-// // modifier lock() {
-// //     require(slot0.unlocked, 'LOK');
-// //     slot0.unlocked = false;
-// //     _;
-// //     slot0.unlocked = true;
-// // }
 
 // /// @dev Prevents calling a function from anyone except the address returned by IUniswapV3Factory#owner()
 // function onlyFactoryOwner(): bool {
@@ -310,22 +303,24 @@ variable observations: list<Observation> = []
 //     //     );
 // }
 
-// /// @inheritdoc IUniswapV3PoolActions
-// entry increaseObservationCardinalityNext(observationCardinalityNext: nat)
-//     // external
-//     // override
-//     // lock
-//     // noDelegateCall
-// {
-//     // uint16 observationCardinalityNextOld = slot0.observationCardinalityNext; // for the event
-//     // uint16 observationCardinalityNextNew = observations.grow(
-//     //     observationCardinalityNextOld,
-//     //     observationCardinalityNext
-//     // );
-//     // slot0.observationCardinalityNext = observationCardinalityNextNew;
-//     // if (observationCardinalityNextOld != observationCardinalityNextNew)
-//     //     emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
-// }
+/// @inheritdoc IUniswapV3PoolActions
+entry increaseObservationCardinalityNext(observationCardinalityNext: nat)
+    // external
+    // override
+    // noDelegateCall
+{
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked = false;
+    // uint16 observationCardinalityNextOld = slot0.observationCardinalityNext; // for the event
+    // uint16 observationCardinalityNextNew = observations.grow(
+    //     observationCardinalityNextOld,
+    //     observationCardinalityNext
+    // );
+    // slot0.observationCardinalityNext = observationCardinalityNextNew;
+    // if (observationCardinalityNextOld != observationCardinalityNextNew)
+    //     emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
+    slot0.unlocked = true;
+}
 
 // /// @inheritdoc IUniswapV3PoolActions
 // /// @dev not locked because it initializes unlocked
@@ -517,93 +512,102 @@ variable observations: list<Observation> = []
 //     // }
 // }
 
-// /// @inheritdoc IUniswapV3PoolActions
-// /// @dev noDelegateCall is applied indirectly via _modifyPosition
-// getter mint(
-//     /* address */ recipient: address,
-//     /* int24 */ tickLower: int,
-//     /* int24 */ tickUpper: int,
-//     /* uint128 */ amount: nat,
-//     /* bytes calldata */ data: bytes
-// ) /* external override lock returns */ : (nat /* uint256 amount0 */, nat /* uint256 amount1 */) {
-//     // require(amount > 0);
-//     // (, int256 amount0Int, int256 amount1Int) = _modifyPosition(
-//     //     ModifyPositionParams({
-//     //         owner: recipient,
-//     //         tickLower: tickLower,
-//     //         tickUpper: tickUpper,
-//     //         liquidityDelta: int256(amount).toInt128()
-//     //     })
-//     // );
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev noDelegateCall is applied indirectly via _modifyPosition
+getter mint(
+    /* address */ recipient: address,
+    /* int24 */ tickLower: int,
+    /* int24 */ tickUpper: int,
+    /* uint128 */ amount: nat,
+    /* bytes calldata */ data: bytes
+) /* external override returns */ : (nat /* uint256 amount0 */, nat /* uint256 amount1 */) {
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked = false;
+    // require(amount > 0);
+    // (, int256 amount0Int, int256 amount1Int) = _modifyPosition(
+    //     ModifyPositionParams({
+    //         owner: recipient,
+    //         tickLower: tickLower,
+    //         tickUpper: tickUpper,
+    //         liquidityDelta: int256(amount).toInt128()
+    //     })
+    // );
 
-//     // amount0 = uint256(amount0Int);
-//     // amount1 = uint256(amount1Int);
+    // amount0 = uint256(amount0Int);
+    // amount1 = uint256(amount1Int);
 
-//     // uint256 balance0Before;
-//     // uint256 balance1Before;
-//     // if (amount0 > 0) balance0Before = balance0();
-//     // if (amount1 > 0) balance1Before = balance1();
-//     // IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(amount0, amount1, data);
-//     // if (amount0 > 0) require(balance0Before.add(amount0) <= balance0(), 'M0');
-//     // if (amount1 > 0) require(balance1Before.add(amount1) <= balance1(), 'M1');
+    // uint256 balance0Before;
+    // uint256 balance1Before;
+    // if (amount0 > 0) balance0Before = balance0();
+    // if (amount1 > 0) balance1Before = balance1();
+    // IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(amount0, amount1, data);
+    // if (amount0 > 0) require(balance0Before.add(amount0) <= balance0(), 'M0');
+    // if (amount1 > 0) require(balance1Before.add(amount1) <= balance1(), 'M1');
 
-//     // emit Mint(msg.sender, recipient, tickLower, tickUpper, amount, amount0, amount1);
-// }
+    // emit Mint(msg.sender, recipient, tickLower, tickUpper, amount, amount0, amount1);
+    slot0.unlocked = true;
+}
 
-// /// @inheritdoc IUniswapV3PoolActions
-// getter collect(
-//     /* address */ recipient: address,
-//     /* int24 */ tickLower: int,
-//     /* int24 */ tickUpper: int,
-//     /* uint128 */ amount0Requested: nat,
-//     /* uint128 */ amount1Requested: nat
-// ) /* external override lock returns */ : {nat, nat} /* (uint128 amount0, uint128 amount1) */ {
-//     // // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
-//     // Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
+/// @inheritdoc IUniswapV3PoolActions
+getter collect(
+    /* address */ recipient: address,
+    /* int24 */ tickLower: int,
+    /* int24 */ tickUpper: int,
+    /* uint128 */ amount0Requested: nat,
+    /* uint128 */ amount1Requested: nat
+) /* external override returns */ : {nat, nat} /* (uint128 amount0, uint128 amount1) */ {
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked = false;
+    // // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
+    // Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
 
-//     // amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
-//     // amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
+    // amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
+    // amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
 
-//     // if (amount0 > 0) {
-//     //     position.tokensOwed0 -= amount0;
-//     //     TransferHelper.safeTransfer(token0, recipient, amount0);
-//     // }
-//     // if (amount1 > 0) {
-//     //     position.tokensOwed1 -= amount1;
-//     //     TransferHelper.safeTransfer(token1, recipient, amount1);
-//     // }
+    // if (amount0 > 0) {
+    //     position.tokensOwed0 -= amount0;
+    //     TransferHelper.safeTransfer(token0, recipient, amount0);
+    // }
+    // if (amount1 > 0) {
+    //     position.tokensOwed1 -= amount1;
+    //     TransferHelper.safeTransfer(token1, recipient, amount1);
+    // }
 
-//     // emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
-// }
+    // emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
+    slot0.unlocked = true;
+}
 
-// /// @inheritdoc IUniswapV3PoolActions
-// /// @dev noDelegateCall is applied indirectly via _modifyPosition
-// getter burn(
-//     /* int24 */ tickLower: int,
-//     /* int24 */ tickUpper: int,
-//     /* uint128 */ amount: nat
-// ) /* external override lock returns */ : {nat, nat} /* (uint256 amount0, uint256 amount1) */ {
-//     // (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
-//     //     ModifyPositionParams({
-//     //         owner: msg.sender,
-//     //         tickLower: tickLower,
-//     //         tickUpper: tickUpper,
-//     //         liquidityDelta: -int256(amount).toInt128()
-//     //     })
-//     // );
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev noDelegateCall is applied indirectly via _modifyPosition
+getter burn(
+    /* int24 */ tickLower: int,
+    /* int24 */ tickUpper: int,
+    /* uint128 */ amount: nat
+) /* external override returns */ : {nat, nat} /* (uint256 amount0, uint256 amount1) */ {
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked = false;
+    // (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
+    //     ModifyPositionParams({
+    //         owner: msg.sender,
+    //         tickLower: tickLower,
+    //         tickUpper: tickUpper,
+    //         liquidityDelta: -int256(amount).toInt128()
+    //     })
+    // );
 
-//     // amount0 = uint256(-amount0Int);
-//     // amount1 = uint256(-amount1Int);
+    // amount0 = uint256(-amount0Int);
+    // amount1 = uint256(-amount1Int);
 
-//     // if (amount0 > 0 || amount1 > 0) {
-//     //     (position.tokensOwed0, position.tokensOwed1) = (
-//     //         position.tokensOwed0 + uint128(amount0),
-//     //         position.tokensOwed1 + uint128(amount1)
-//     //     );
-//     // }
+    // if (amount0 > 0 || amount1 > 0) {
+    //     (position.tokensOwed0, position.tokensOwed1) = (
+    //         position.tokensOwed0 + uint128(amount0),
+    //         position.tokensOwed1 + uint128(amount1)
+    //     );
+    // }
 
-//     // emit Burn(msg.sender, tickLower, tickUpper, amount, amount0, amount1);
-// }
+    // emit Burn(msg.sender, tickLower, tickUpper, amount, amount0, amount1);
+    slot0.unlocked = true;
+}
 
 // record SwapCache {
 //     // the protocol fee for the input token
@@ -846,82 +850,91 @@ variable observations: list<Observation> = []
 //     // slot0.unlocked = true;
 // }
 
-// /// @inheritdoc IUniswapV3PoolActions
-// entry flash(
-//     /* address */ recipient: address,
-//     /* uint256 */ amount0: nat,
-//     /* uint256 */ amount1: nat,
-//     /* bytes calldata */ data: bytes
-// ) /* external override lock noDelegateCall */ {
-//     // uint128 _liquidity = liquidity;
-//     // require(_liquidity > 0, 'L');
+/// @inheritdoc IUniswapV3PoolActions
+entry flash(
+    /* address */ recipient: address,
+    /* uint256 */ amount0: nat,
+    /* uint256 */ amount1: nat,
+    /* bytes calldata */ data: bytes
+) /* external override noDelegateCall */ {
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked = false;
+    // uint128 _liquidity = liquidity;
+    // require(_liquidity > 0, 'L');
 
-//     // uint256 fee0 = FullMath.mulDivRoundingUp(amount0, fee, 1e6);
-//     // uint256 fee1 = FullMath.mulDivRoundingUp(amount1, fee, 1e6);
-//     // uint256 balance0Before = balance0();
-//     // uint256 balance1Before = balance1();
+    // uint256 fee0 = FullMath.mulDivRoundingUp(amount0, fee, 1e6);
+    // uint256 fee1 = FullMath.mulDivRoundingUp(amount1, fee, 1e6);
+    // uint256 balance0Before = balance0();
+    // uint256 balance1Before = balance1();
 
-//     // if (amount0 > 0) TransferHelper.safeTransfer(token0, recipient, amount0);
-//     // if (amount1 > 0) TransferHelper.safeTransfer(token1, recipient, amount1);
+    // if (amount0 > 0) TransferHelper.safeTransfer(token0, recipient, amount0);
+    // if (amount1 > 0) TransferHelper.safeTransfer(token1, recipient, amount1);
 
-//     // IUniswapV3FlashCallback(msg.sender).uniswapV3FlashCallback(fee0, fee1, data);
+    // IUniswapV3FlashCallback(msg.sender).uniswapV3FlashCallback(fee0, fee1, data);
 
-//     // uint256 balance0After = balance0();
-//     // uint256 balance1After = balance1();
+    // uint256 balance0After = balance0();
+    // uint256 balance1After = balance1();
 
-//     // require(balance0Before.add(fee0) <= balance0After, 'F0');
-//     // require(balance1Before.add(fee1) <= balance1After, 'F1');
+    // require(balance0Before.add(fee0) <= balance0After, 'F0');
+    // require(balance1Before.add(fee1) <= balance1After, 'F1');
 
-//     // // sub is safe because we know balanceAfter is gt balanceBefore by at least fee
-//     // uint256 paid0 = balance0After - balance0Before;
-//     // uint256 paid1 = balance1After - balance1Before;
+    // // sub is safe because we know balanceAfter is gt balanceBefore by at least fee
+    // uint256 paid0 = balance0After - balance0Before;
+    // uint256 paid1 = balance1After - balance1Before;
 
-//     // if (paid0 > 0) {
-//     //     uint8 feeProtocol0 = slot0.feeProtocol % 16;
-//     //     uint256 fees0 = feeProtocol0 == 0 ? 0 : paid0 / feeProtocol0;
-//     //     if (uint128(fees0) > 0) protocolFees.token0 += uint128(fees0);
-//     //     feeGrowthGlobal0X128 += FullMath.mulDiv(paid0 - fees0, FixedPoint128.Q128, _liquidity);
-//     // }
-//     // if (paid1 > 0) {
-//     //     uint8 feeProtocol1 = slot0.feeProtocol >> 4;
-//     //     uint256 fees1 = feeProtocol1 == 0 ? 0 : paid1 / feeProtocol1;
-//     //     if (uint128(fees1) > 0) protocolFees.token1 += uint128(fees1);
-//     //     feeGrowthGlobal1X128 += FullMath.mulDiv(paid1 - fees1, FixedPoint128.Q128, _liquidity);
-//     // }
+    // if (paid0 > 0) {
+    //     uint8 feeProtocol0 = slot0.feeProtocol % 16;
+    //     uint256 fees0 = feeProtocol0 == 0 ? 0 : paid0 / feeProtocol0;
+    //     if (uint128(fees0) > 0) protocolFees.token0 += uint128(fees0);
+    //     feeGrowthGlobal0X128 += FullMath.mulDiv(paid0 - fees0, FixedPoint128.Q128, _liquidity);
+    // }
+    // if (paid1 > 0) {
+    //     uint8 feeProtocol1 = slot0.feeProtocol >> 4;
+    //     uint256 fees1 = feeProtocol1 == 0 ? 0 : paid1 / feeProtocol1;
+    //     if (uint128(fees1) > 0) protocolFees.token1 += uint128(fees1);
+    //     feeGrowthGlobal1X128 += FullMath.mulDiv(paid1 - fees1, FixedPoint128.Q128, _liquidity);
+    // }
 
-//     // emit Flash(msg.sender, recipient, amount0, amount1, paid0, paid1);
-// }
+    // emit Flash(msg.sender, recipient, amount0, amount1, paid0, paid1);
+    slot0.unlocked = true;
+}
 
-// /// @inheritdoc IUniswapV3PoolOwnerActions
-// entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override lock onlyFactoryOwner */ {
-//     // require(
-//     //     (feeProtocol0 == 0 || (feeProtocol0 >= 4 && feeProtocol0 <= 10)) &&
-//     //         (feeProtocol1 == 0 || (feeProtocol1 >= 4 && feeProtocol1 <= 10))
-//     // );
-//     // uint8 feeProtocolOld = slot0.feeProtocol;
-//     // slot0.feeProtocol = feeProtocol0 + (feeProtocol1 << 4);
-//     // emit SetFeeProtocol(feeProtocolOld % 16, feeProtocolOld >> 4, feeProtocol0, feeProtocol1);
-// }
+/// @inheritdoc IUniswapV3PoolOwnerActions
+entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override onlyFactoryOwner */ {
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked = false;
+    // require(
+    //     (feeProtocol0 == 0 || (feeProtocol0 >= 4 && feeProtocol0 <= 10)) &&
+    //         (feeProtocol1 == 0 || (feeProtocol1 >= 4 && feeProtocol1 <= 10))
+    // );
+    // uint8 feeProtocolOld = slot0.feeProtocol;
+    // slot0.feeProtocol = feeProtocol0 + (feeProtocol1 << 4);
+    // emit SetFeeProtocol(feeProtocolOld % 16, feeProtocolOld >> 4, feeProtocol0, feeProtocol1);
+    slot0.unlocked = true;
+}
 
-// /// @inheritdoc IUniswapV3PoolOwnerActions
-// getter collectProtocol(
-//     /* address */ recipient: address,
-//     /* uint128 */ amount0Requested: nat,
-//     /* uint128 */ amount1Requested: nat
-// ) /* external override lock onlyFactoryOwner returns (uint128 amount0, uint128 amount1) */ : {nat, nat} {
-//     // amount0 = amount0Requested > protocolFees.token0 ? protocolFees.token0 : amount0Requested;
-//     // amount1 = amount1Requested > protocolFees.token1 ? protocolFees.token1 : amount1Requested;
+/// @inheritdoc IUniswapV3PoolOwnerActions
+getter collectProtocol(
+    /* address */ recipient: address,
+    /* uint128 */ amount0Requested: nat,
+    /* uint128 */ amount1Requested: nat
+) /* external override onlyFactoryOwner returns (uint128 amount0, uint128 amount1) */ : {nat, nat} {
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked = false;
+    // amount0 = amount0Requested > protocolFees.token0 ? protocolFees.token0 : amount0Requested;
+    // amount1 = amount1Requested > protocolFees.token1 ? protocolFees.token1 : amount1Requested;
 
-//     // if (amount0 > 0) {
-//     //     if (amount0 == protocolFees.token0) amount0--; // ensure that the slot is not cleared, for gas savings
-//     //     protocolFees.token0 -= amount0;
-//     //     TransferHelper.safeTransfer(token0, recipient, amount0);
-//     // }
-//     // if (amount1 > 0) {
-//     //     if (amount1 == protocolFees.token1) amount1--; // ensure that the slot is not cleared, for gas savings
-//     //     protocolFees.token1 -= amount1;
-//     //     TransferHelper.safeTransfer(token1, recipient, amount1);
-//     // }
+    // if (amount0 > 0) {
+    //     if (amount0 == protocolFees.token0) amount0--; // ensure that the slot is not cleared, for gas savings
+    //     protocolFees.token0 -= amount0;
+    //     TransferHelper.safeTransfer(token0, recipient, amount0);
+    // }
+    // if (amount1 > 0) {
+    //     if (amount1 == protocolFees.token1) amount1--; // ensure that the slot is not cleared, for gas savings
+    //     protocolFees.token1 -= amount1;
+    //     TransferHelper.safeTransfer(token1, recipient, amount1);
+    // }
 
-//     // emit CollectProtocol(msg.sender, recipient, amount0, amount1);
-// }
+    // emit CollectProtocol(msg.sender, recipient, amount0, amount1);
+    slot0.unlocked = true;
+}
