@@ -53,6 +53,18 @@ function noDelegateCall() : bool {
     return true
 }
 
+constant MIN_TICK: int = -887272
+constant MAX_TICK: int = -MIN_TICK
+constant MAX_UINT128: nat = (1 <<| 128)
+
+function tickSpacingToMaxLiquidityPerTick(tickSpacing_: int): nat {
+    var minTick = (MIN_TICK div tickSpacing_) * tickSpacing_;
+    var maxTick = (MAX_TICK div tickSpacing_) * tickSpacing_;
+    var numTicks: int = (maxTick - minTick) div tickSpacing_ + 1;
+    var retVal = int_to_nat((MAX_UINT128 - 1) div numTicks) ? the : 0;
+    return retVal
+}
+
 entry createPool(tokenA: address, tokenB: address, fee_: nat) {
     require {
         createPool1: noDelegateCall();
@@ -69,10 +81,10 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
 
         // /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
         // /// clearing it after deploying the pool.
-        const delegate : option<key_hash> = none;
         const amount : tez = 0tz;
-        const storage_init : unit = Unit;
-        const op_addr : (operation * address) = create_contract(uniswapV3Pool, delegate, amount, storage_init);
+        const maxLiquidityPerTick : nat = tickSpacingToMaxLiquidityPerTick(tickSpacing_cp);
+        const storage_init : (address * address * address * nat * int * nat * nat * nat) = (self_address, token0_cp, token1_cp, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0);
+        const op_addr : (operation * address) = create_contract(uniswapV3Pool, none, amount, storage_init);
         operations := [op_addr[0]];
 
         getPool[(token0_cp, token1_cp, fee_)].pool := op_addr[1];
