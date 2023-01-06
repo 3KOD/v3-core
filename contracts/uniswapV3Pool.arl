@@ -77,36 +77,40 @@ variable feeGrowthGlobal0X128 : nat = 0
 /// @inheritdoc IUniswapV3PoolState
 variable feeGrowthGlobal1X128 : nat = 0
 
-// // accumulated protocol fees in token0/token1 units
-// /// @inheritdoc IUniswapV3PoolState
-// // asset protocolFees {
-// //     token0: nat;
-// //     token1: nat;
-// // }
+// accumulated protocol fees in token0/token1 units
+record ProtocolFees {
+    token0_fees: nat;
+    token1_fees: nat;
+} as ((token0, token1))
+/// @inheritdoc IUniswapV3PoolState
+variable protocolFees: ProtocolFees = {
+    token0_fees = 0;
+    token1_fees = 0
+}
 
-// /// @inheritdoc IUniswapV3PoolState
-// variable liquidity : nat = 0
+/// @inheritdoc IUniswapV3PoolState
+variable liquidity : nat = 0
 
-// /// @inheritdoc IUniswapV3PoolState
-// // asset ticks identified by tickId to big_map {
-// //     tickId: int;
-// //     info: Tick.Info;
-// // }
-// // mapping(int24 => Tick.Info) public override ticks;
-// /// @inheritdoc IUniswapV3PoolState
-// // asset tickBitmap identified by tick to big_map {
-// //     tick : int;
-// //     tickSpacing: nat = 0;
-// // }
-// /// @inheritdoc IUniswapV3PoolState
-// // asset positions identified by positionId to big_map {
-// //     positionId: bytes32;
-// //     positionInfo: Position.Info;
-// // }
-// // mapping(bytes32 => Position.Info) public override positions;
-// /// @inheritdoc IUniswapV3PoolState
-// // variable observations: Oracle.Observation[65535];
-// // Oracle.Observation[65535] public override observations;
+/// @inheritdoc IUniswapV3PoolState
+// asset ticks identified by tickId to big_map {
+//     tickId: int;
+//     info: Tick.Info;
+// }
+// mapping(int24 => Tick.Info) public override ticks;
+/// @inheritdoc IUniswapV3PoolState
+// asset tickBitmap identified by tick to big_map {
+//     tick : int;
+//     tickSpacing: nat = 0;
+// }
+/// @inheritdoc IUniswapV3PoolState
+// asset positions identified by positionId to big_map {
+//     positionId: bytes32;
+//     positionInfo: Position.Info;
+// }
+// mapping(bytes32 => Position.Info) public override positions;
+/// @inheritdoc IUniswapV3PoolState
+// variable observations: Oracle.Observation[65535];
+// Oracle.Observation[65535] public override observations;
 
 // /// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
 // /// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
@@ -179,7 +183,7 @@ variable feeGrowthGlobal1X128 : nat = 0
 //     return 0
 // }
 
-/// @inheritdoc IUniswapV3PoolDerivedState
+// /// @inheritdoc IUniswapV3PoolDerivedState
 // view snapshotCumulativesInside(tickLower: int, tickUpper: int)
 //     /* external
 //     view
