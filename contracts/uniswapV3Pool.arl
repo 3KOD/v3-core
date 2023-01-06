@@ -137,9 +137,19 @@ asset positions identified by positionId to big_map {
     positionId: bytes;
     positionInfo: PositionInfo;
 }
+record Observation {
+    // the block timestamp of the observation
+    blockTimestamp_Obs: nat;
+    // the tick accumulator, i.e. tick * time elapsed since the pool was first initialized
+    tickCumulative_Obs: int;
+    // the seconds per liquidity, i.e. seconds elapsed / max(1, liquidity) since the pool was first initialized
+    secondsPerLiquidityCumulativeX128_Obs: nat;
+    // whether or not the observation is initialized
+    initialized_Obs: bool;
+} as ((blockTimestamp, tickCumulative, secondsPerLiquidityCumulativeX128, %initialized))
 /// @inheritdoc IUniswapV3PoolState
-// variable observations: Oracle.Observation[65535];
 // Oracle.Observation[65535] public override observations;
+variable observations: list<Observation> = []
 
 // /// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
 // /// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
