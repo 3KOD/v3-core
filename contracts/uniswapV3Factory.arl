@@ -37,23 +37,15 @@ asset getPool identified by token0 token1 feeOfGetPool to big_map {
     token0: address;
     token1: address;
     feeOfGetPool: nat;
-    pool: option<address>;
+    pool: address;
 }
 
 record Parameters {
-    para_factory: option<address>;
-    para_token0: option<address>;
-    para_token1: option<address>;
+    para_factory: address;
+    para_token0: address;
+    para_token1: address;
     para_fee: nat;
     para_tickSpacing: int;
-}
-
-variable parameters: Parameters = {
-    none;
-    none;
-    none;
-    0;
-    0
 }
 
 function noDelegateCall() : bool {
@@ -83,8 +75,8 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
         const op_addr : (operation * address) = create_contract(uniswapV3Pool, delegate, amount, storage_init);
         operations := [op_addr[0]];
 
-        getPool[(token0_cp, token1_cp, fee_)].pool := some(op_addr[1]);
-        getPool[(token1_cp, token0_cp, fee_)].pool := some(op_addr[1]);
+        getPool[(token0_cp, token1_cp, fee_)].pool := op_addr[1];
+        getPool[(token1_cp, token0_cp, fee_)].pool := op_addr[1];
         emit<PoolCreated>({token0_cp; token1_cp; fee_; tickSpacing_cp; op_addr[1]})
     }
 }

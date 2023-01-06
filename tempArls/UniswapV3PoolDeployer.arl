@@ -1,8 +1,8 @@
 
 archetype UniswapV3PoolDeployer
 
-import IUniswapV3PoolDeployer from "./interfaces/IUniswapV3PoolDeployer.tz"
-import UniswapV3Pool from "./UniswapV3Pool.tz"
+// import IUniswapV3PoolDeployer from "./interfaces/IUniswapV3PoolDeployer.tz"
+// import UniswapV3Pool from "./UniswapV3Pool.tz"
 
 asset parameters {
     factory: address;
@@ -13,9 +13,11 @@ asset parameters {
 }
 
 getter deploy(
-    factory: address, 
-    token0: address, 
-    token1: address, 
-    fee: nat,
-    tickSpacing: int
-) /* internal */ : address {}
+    factory_: address, 
+    // token0_: address, 
+    // token1_: address, 
+    // fee_: nat,
+    // tickSpacing_: int
+) /* internal */ : address {
+    return factory_
+}
