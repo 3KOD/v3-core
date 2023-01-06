@@ -1,4 +1,4 @@
-archetype uniswapV3Pool
+archetype uniswapV3Pool(const factory: address, const token0: address, const token1: address, const fee: nat, const tickSpacing: int, const maxLiquidityPerTick: nat)
 
 // import IUniswapV3Pool from "./interfaces/IUniswapV3Pool.tz"
 // import NoDelegateCall from "./NoDelegateCall.tz"
@@ -22,6 +22,13 @@ archetype uniswapV3Pool
 // import IUniswapV3SwapCallback from "./interfaces/callback/IUniswapV3SwapCallback.tz"
 // import IUniswapV3FlashCallback from "./interfaces/callback/IUniswapV3FlashCallback.tz"
 
+constant original: address = self_address
+
+function noDelegateCall() : bool {
+    do_fail_if(self_address <> original, ("DelegateCall", original));
+    return true
+}
+
 // using LowGasSafeMath for uint256;
 // using LowGasSafeMath for int256;
 // using SafeCast for uint256;
@@ -31,21 +38,6 @@ archetype uniswapV3Pool
 // using Position for mapping(bytes32 => Position.Info);
 // using Position for Position.Info;
 // using Oracle for Oracle.Observation[65535];
-
-/// @inheritdoc IUniswapV3PoolImmutables
-variable factory : option<address> = none
-// /// @inheritdoc IUniswapV3PoolImmutables
-// variable token0 : address = @KT1000000000000000000000000000000000
-// /// @inheritdoc IUniswapV3PoolImmutables
-// variable token1 : address = @KT1000000000000000000000000000000000
-// /// @inheritdoc IUniswapV3PoolImmutables
-// variable fee : nat = 0
-
-// /// @inheritdoc IUniswapV3PoolImmutables
-// variable tickSpacing : int = 0
-
-// /// @inheritdoc IUniswapV3PoolImmutables
-// variable maxLiquidityPerTick : nat = 0
 
 // /// @inheritdoc IUniswapV3PoolState
 // asset slot0 {

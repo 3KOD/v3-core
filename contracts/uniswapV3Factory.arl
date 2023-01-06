@@ -71,7 +71,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
         // /// clearing it after deploying the pool.
         const delegate : option<key_hash> = none;
         const amount : tez = 0tz;
-        const storage_init : option<address> = some(self_address);
+        const storage_init : unit = Unit;
         const op_addr : (operation * address) = create_contract(uniswapV3Pool, delegate, amount, storage_init);
         operations := [op_addr[0]];
 

@@ -1,25 +1,29 @@
-# None
+# Unit
 {
-  storage (option address);
-  parameter (or (or (address %testfunc) (address %testfunc1)) (unit %default));
-  code { UNPAIR;
-         IF_LEFT
-           { IF_LEFT
-               { DUP;
-                 SOME;
-                 DIP { DIG 1; DROP };
-                 DUG 1;
-                 DROP;
-                 NIL operation;
-                 PAIR }
-               { DUP;
-                 SOME;
-                 DIP { DIG 1; DROP };
-                 DUG 1;
-                 DROP;
-                 NIL operation;
-                 PAIR } }
-           { DROP;
-             NIL operation;
-             PAIR } };
+  storage unit;
+  parameter unit;
+  code { LAMBDA
+           unit
+           bool
+           { PUSH unit Unit;
+             SELF_ADDRESS;
+             SELF_ADDRESS;
+             COMPARE;
+             NEQ;
+             IF
+               { SELF_ADDRESS;
+                 PUSH string "DelegateCall";
+                 PAIR;
+                 FAILWITH }
+               {  };
+             PUSH bool True;
+             SWAP;
+             DROP;
+             SWAP;
+             DROP };
+         DIG 1;
+         CDR;
+         NIL operation;
+         PAIR;
+         DIP { DROP } };
 }
