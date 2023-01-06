@@ -1,6 +1,6 @@
-# (Pair factory token0 token1 0 0 0 0 0)
+# (Pair factory token0 token1 0 0 0 (Pair 0 0 0 0 0 0 False) 0 0)
 {
-  storage (pair (address %factory) (address %token0) (address %token1) (nat %fee) (int %tickSpacing) (nat %maxLiquidityPerTick) (nat %feeGrowthGlobal0X128) (nat %feeGrowthGlobal1X128));
+  storage (pair (address %factory) (address %token0) (address %token1) (nat %fee) (int %tickSpacing) (nat %maxLiquidityPerTick) (pair %slot0 (nat %sqrtPriceX96) (int %tick) (nat %observationIndex) (nat %observationCardinality) (nat %observationCardinalityNext) (nat %feeProtocol) (bool %unlocked)) (nat %feeGrowthGlobal0X128) (nat %feeGrowthGlobal1X128));
   parameter unit;
   code { LAMBDA
            unit

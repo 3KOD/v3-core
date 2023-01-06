@@ -83,7 +83,9 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
         // /// clearing it after deploying the pool.
         const amount : tez = 0tz;
         const maxLiquidityPerTick : nat = tickSpacingToMaxLiquidityPerTick(tickSpacing_cp);
-        const storage_init : (address * address * address * nat * int * nat * nat * nat) = (self_address, token0_cp, token1_cp, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0);
+        const slot0 : (nat * int * nat * nat * nat * nat * bool) = (0, 0, 0, 0, 0, 0, false);
+        const storage_init : (address * address * address * nat * int * nat * (nat * int * nat * nat * nat * nat * bool) * nat * nat) = 
+            (self_address, token0_cp, token1_cp, fee_, tickSpacing_cp, maxLiquidityPerTick, slot0, 0, 0);
         const op_addr : (operation * address) = create_contract(uniswapV3Pool, none, amount, storage_init);
         operations := [op_addr[0]];
 

@@ -62,15 +62,15 @@ record Slot0 {
     unlocked: bool;
 }
 
-// variable slot0: Slot0 = {
-//     sqrtPriceX96                = 0;
-//     tick                        = 0;
-//     observationIndex            = 0;
-//     observationCardinality      = 0;
-//     observationCardinalityNext  = 0;
-//     feeProtocol                 = 0;
-//     unlocked                    = false
-// }
+variable slot0: Slot0 = {
+    sqrtPriceX96                = 0;
+    tick                        = 0;
+    observationIndex            = 0;
+    observationCardinality      = 0;
+    observationCardinalityNext  = 0;
+    feeProtocol                 = 0;
+    unlocked                    = false
+}
 
 /// @inheritdoc IUniswapV3PoolState
 variable feeGrowthGlobal0X128 : nat = 0
