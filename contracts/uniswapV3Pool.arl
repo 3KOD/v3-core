@@ -22,6 +22,8 @@ import uniswapV3Factory from "./contracts/michelson/uniswapV3Factory.tz"
 // import IUniswapV3SwapCallback from "./interfaces/callback/IUniswapV3SwapCallback.tz"
 // import IUniswapV3FlashCallback from "./interfaces/callback/IUniswapV3FlashCallback.tz"
 
+constant TickMathMIN_TICK: int = -887272
+constant TickMathMAX_TICK: int = -MIN_TICK
 constant original: address = self_address
 
 function noDelegateCall() : bool {
@@ -166,17 +168,17 @@ variable observations: list<Observation> = []
 /// @dev Prevents calling a function from anyone except the address returned by IUniswapV3Factory#owner()
 function onlyFactoryOwner(): bool {
     const factoryOwner ?= uniswapV3Factory(factory).getOwner() : "VIEW_OWNER_ERR";
-    do_require(caller = factoryOwner, ("ONLY_FACTORY_OWNER_ERR", factoryOwner));
+    do_require(caller = factoryOwner, "ONLY_FACTORY_OWNER_ERR");
     return true
 }
 
-// /// @dev Common checks for valid tick inputs.
-// function checkTicks(tickLower: int, tickUpper: int) /* private pure */ {
-//     do_fail_if(tickLower < tickUpper, "TLU")
-//     // require{tickLower < tickUpper, 'TLU'};
-//     // require{tickLower >= TickMath.MIN_TICK, 'TLM'};
-//     // require{tickUpper <= TickMath.MAX_TICK, 'TUM'};
-// }
+/// @dev Common checks for valid tick inputs.
+function checkTicks(tickLower: int, tickUpper: int): bool {
+    do_require(tickLower < tickUpper, "TLU");
+    do_require(tickLower >= TickMathMIN_TICK, "TLM");
+    do_require(tickUpper <= TickMathMAX_TICK, "TUM");
+    return true
+}
 
 // /// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
 // view blockTimestamp() /* internal view virtual returns */ : nat {
@@ -219,8 +221,8 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int)
         /* secondsInside: */ nat
     }
 {
-    require {snapshotCumulativesInside: noDelegateCall();}
-    // checkTicks(tickLower, tickUpper);
+    require {snapshotCumulativesInside1: noDelegateCall();}
+    require {snapshotCumulativesInside2: checkTicks(tickLower, tickUpper);}
 
     // int56 tickCumulativeLower;
     // int56 tickCumulativeUpper;
@@ -368,8 +370,8 @@ getter _modifyPosition(params: ModifyPositionParams)
         nat, /* int256 amount1 */
     }
 {
-    require {_modifyPosition: noDelegateCall();}
-    // checkTicks(params.tickLower, params.tickUpper);
+    require {_modifyPosition1: noDelegateCall();}
+    require {_modifyPosition2: checkTicks(params.tickLower, params.tickUpper);}
 
     // Slot0 memory _slot0 = slot0; // SLOAD for gas optimization
 
