@@ -129,5 +129,8 @@ entry enableFeeAmount(fee_: nat, tickSpacing_: int) {
         feeAmountTickSpacing.add_update(fee_, { tickSpacing := tickSpacing_ });
         emit<FeeAmountEnabled>({fee_; tickSpacing_})
     }
+}
 
+view getOwner(): address {
+    return owner
 }
