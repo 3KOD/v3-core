@@ -484,4 +484,17 @@
              DIG 1;
              PAIR };
          DIP { DROP 2 } };
+  view
+    "getOwner"
+    unit
+    address
+    { CDR;
+      UNPAIR;
+      SWAP;
+      DROP;
+      UNIT;
+      DUP 2;
+      SWAP;
+      DROP;
+      DIP { DROP } }
 }
