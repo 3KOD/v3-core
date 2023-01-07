@@ -1,7 +1,5 @@
 archetype uniswapV3Pool(factory: address, token0: address, token1: address)
 
-import uniswapV3Factory from "./contracts/michelson/uniswapV3Factory.tz"
-
 // import LowGasSafeMath from "./libraries/LowGasSafeMath.tz"
 // import SafeCast from "./libraries/SafeCast.tz"
 // import Tick from "./libraries/Tick.tz"
@@ -167,7 +165,7 @@ variable observations: list<Observation> = []
 
 /// @dev Prevents calling a function from anyone except the address returned by IUniswapV3Factory#owner()
 function onlyFactoryOwner(): bool {
-    const factoryOwner ?= uniswapV3Factory(factory).getOwner(Unit) : "VIEW_OWNER_ERR";
+    const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : "VIEW_OWNER_ERR";
     do_require(caller = factoryOwner, "ONLY_FACTORY_OWNER_ERR");
     return true
 }
@@ -186,9 +184,9 @@ view blockTimestamp_(): date {
     // return uint32(block.timestamp); // truncation is desired
 }
 
-// /// @dev Get the pool's balance of token0
-// /// @dev This function is gas optimized to avoid a redundant extcodesize check in addition to the returndatasize
-// /// check
+/// @dev Get the pool's balance of token0
+/// @dev This function is gas optimized to avoid a redundant extcodesize check in addition to the returndatasize
+/// check
 // view balance0() /* private view returns */ : nat {
 //     // (bool success, bytes memory data) = token0.staticcall(
 //     //     abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this))
