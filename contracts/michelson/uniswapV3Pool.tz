@@ -21,9 +21,81 @@
              DROP;
              SWAP;
              DROP };
-         DIG 1;
+         LAMBDA
+           address
+           bool
+           { PUSH unit Unit;
+             DUP 2;
+             PUSH unit Unit;
+             VIEW "getOwner" address;
+             IF_NONE
+               { PUSH string "VIEW_OWNER_ERR";
+                 FAILWITH }
+               {  };
+             DUP;
+             SENDER;
+             COMPARE;
+             EQ;
+             NOT;
+             IF
+               { PUSH string "ONLY_FACTORY_OWNER_ERR";
+                 FAILWITH }
+               {  };
+             PUSH bool True;
+             DIP { DIG 1; DROP };
+             DUG 1;
+             DROP;
+             DUG 1;
+             DROP };
+         LAMBDA
+           (pair int int)
+           bool
+           { UNPAIR 2;
+             PUSH unit Unit;
+             DUP 3;
+             DUP 3;
+             COMPARE;
+             LT;
+             NOT;
+             IF
+               { PUSH string "TLU";
+                 FAILWITH }
+               {  };
+             PUSH int -887272;
+             DUP 3;
+             COMPARE;
+             GE;
+             NOT;
+             IF
+               { PUSH string "TLM";
+                 FAILWITH }
+               {  };
+             PUSH int 887272;
+             DUP 4;
+             COMPARE;
+             LE;
+             NOT;
+             IF
+               { PUSH string "TUM";
+                 FAILWITH }
+               {  };
+             PUSH bool True;
+             SWAP;
+             DROP;
+             DUG 2;
+             DROP 2 };
+         DIG 3;
          CDR;
          NIL operation;
          PAIR;
-         DIP { DROP } };
+         DIP { DROP 3 } };
+  view
+    "blockTimestamp_"
+    unit
+    timestamp
+    { DROP;
+      UNIT;
+      NOW;
+      SWAP;
+      DROP }
 }
