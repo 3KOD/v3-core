@@ -180,11 +180,11 @@ function checkTicks(tickLower: int, tickUpper: int): bool {
     return true
 }
 
-// /// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
-// view blockTimestamp() /* internal view virtual returns */ : nat {
-//     // return uint32(block.timestamp); // truncation is desired
-//     return 0
-// }
+/// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
+view blockTimestamp_(): date {
+    return now
+    // return uint32(block.timestamp); // truncation is desired
+}
 
 // /// @dev Get the pool's balance of token0
 // /// @dev This function is gas optimized to avoid a redundant extcodesize check in addition to the returndatasize
@@ -262,7 +262,7 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int)
     //         secondsOutsideLower - secondsOutsideUpper
     //     );
     // } else if (_slot0.tick < tickUpper) {
-    //     uint32 time = _blockTimestamp();
+    //     uint32 time = blockTimestamp_();
     //     (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observations.observeSingle(
     //         time,
     //         0,
@@ -297,7 +297,7 @@ view observe(uint32[] calldata secondsAgos)
     require {observe: noDelegateCall();}
     // return
     //     observations.observe(
-    //         _blockTimestamp(),
+    //         blockTimestamp_(),
     //         secondsAgos,
     //         slot0.tick,
     //         slot0.observationIndex,
@@ -332,7 +332,7 @@ entry increaseObservationCardinalityNext(observationCardinalityNext: nat)
 
 //     // int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
 
-//     // (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(_blockTimestamp());
+//     // (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(blockTimestamp_());
 
 //     // slot0 = Slot0({
 //     //     sqrtPriceX96: sqrtPriceX96,
@@ -399,7 +399,7 @@ getter _modifyPosition(params: ModifyPositionParams)
     //         // write an oracle entry
     //         (slot0.observationIndex, slot0.observationCardinality) = observations.write(
     //             _slot0.observationIndex,
-    //             _blockTimestamp(),
+    //             blockTimestamp_(),
     //             _slot0.tick,
     //             liquidityBefore,
     //             _slot0.observationCardinality,
@@ -451,7 +451,7 @@ getter _modifyPosition(params: ModifyPositionParams)
 //     // bool flippedLower;
 //     // bool flippedUpper;
 //     // if (liquidityDelta != 0) {
-//     //     uint32 time = _blockTimestamp();
+//     //     uint32 time = blockTimestamp_();
 //     //     (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observations.observeSingle(
 //     //         time,
 //     //         0,
@@ -688,7 +688,7 @@ getter swap(
 
     // SwapCache memory cache = SwapCache({
     //     liquidityStart: liquidity,
-    //     blockTimestamp: _blockTimestamp(),
+    //     blockTimestamp: blockTimestamp_(),
     //     feeProtocol: zeroForOne ? (slot0Start.feeProtocol % 16) : (slot0Start.feeProtocol >> 4),
     //     secondsPerLiquidityCumulativeX128: 0,
     //     tickCumulative: 0,
