@@ -22,6 +22,7 @@ archetype uniswapV3Pool(factory: address, token0: address, token1: address)
 
 constant INVALID_NAT             : string = "INVALID_NAT"
 constant INVALID_RECORD          : string = "INVALID_RECORD"
+constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
@@ -701,6 +702,62 @@ function observeSingle(
     return ((retVal1, retVal2))
 }
 
+// /// @notice Computes the position in the mapping where the initialized bit for a tick lives
+// /// @param tick The tick for which to compute the position
+// /// @return wordPos The key in the mapping containing the word in which the bit is stored
+// /// @return bitPos The bit position in the word where the flag is stored
+// function position(tick_: int) : int * nat {
+//     const wordPos = tick_ div 256;
+//     const bitPos = tick_ % 256;
+//     return ((wordPos, bitPos))
+// }
+
+/// @notice Retrieves fee growth data
+/// @param self The mapping containing all tick information for initialized ticks
+/// @param tickLower The lower tick boundary of the position
+/// @param tickUpper The upper tick boundary of the position
+/// @param tickCurrent The current tick
+/// @param feeGrowthGlobal0X128 The all-time global fee growth, per unit of liquidity, in token0
+/// @param feeGrowthGlobal1X128 The all-time global fee growth, per unit of liquidity, in token1
+/// @return feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
+/// @return feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
+function getFeeGrowthInside(
+    tickLower_getFeeGrowthInside: int,
+    tickUpper_getFeeGrowthInside: int,
+    tickCurrent_getFeeGrowthInside: int,
+    feeGrowthGlobal0X128_getFeeGrowthInside: nat,
+    feeGrowthGlobal1X128_getFeeGrowthInside: nat
+) : nat * nat {
+    const lower = ticks[tickLower_getFeeGrowthInside].info;
+    const upper = ticks[tickUpper_getFeeGrowthInside].info;
+
+    // calculate fee growth below
+    var feeGrowthBelow0X128 = 0;
+    var feeGrowthBelow1X128 = 0;
+    if (tickCurrent_getFeeGrowthInside >= tickLower_getFeeGrowthInside) then begin
+        feeGrowthBelow0X128 := lower.feeGrowthOutside0X128;
+        feeGrowthBelow1X128 := lower.feeGrowthOutside1X128;
+    end else begin
+        feeGrowthBelow0X128 ?:= int_to_nat(feeGrowthGlobal0X128_getFeeGrowthInside - lower.feeGrowthOutside0X128) : INVALID_NAT;
+        feeGrowthBelow1X128 ?:= int_to_nat(feeGrowthGlobal1X128_getFeeGrowthInside - lower.feeGrowthOutside1X128) : INVALID_NAT;
+    end;
+
+    // calculate fee growth above
+    var feeGrowthAbove0X128 = 0;
+    var feeGrowthAbove1X128 = 0;
+    if (tickCurrent_getFeeGrowthInside < tickUpper_getFeeGrowthInside) then begin
+        feeGrowthAbove0X128 := upper.feeGrowthOutside0X128;
+        feeGrowthAbove1X128 := upper.feeGrowthOutside1X128;
+    end else begin
+        feeGrowthAbove0X128 ?:= int_to_nat(feeGrowthGlobal0X128_getFeeGrowthInside - upper.feeGrowthOutside0X128) : INVALID_NAT;
+        feeGrowthAbove1X128 ?:= int_to_nat(feeGrowthGlobal1X128_getFeeGrowthInside - upper.feeGrowthOutside1X128) : INVALID_NAT;
+    end;
+
+    const feeGrowthInside0X128 ?= int_to_nat(feeGrowthGlobal0X128_getFeeGrowthInside - feeGrowthBelow0X128 - feeGrowthAbove0X128) : INVALID_NAT;
+    const feeGrowthInside1X128 ?= int_to_nat(feeGrowthGlobal1X128_getFeeGrowthInside - feeGrowthBelow1X128 - feeGrowthAbove1X128) : INVALID_NAT;
+    return ((feeGrowthInside0X128, feeGrowthInside1X128))
+}
+
 /// @inheritdoc IUniswapV3PoolActions
 /// @dev noDelegateCall is applied indirectly via _modifyPosition
 entry mint(
@@ -735,7 +792,7 @@ entry mint(
         // }
         do_require(noDelegateCall(), ());
         do_require(checkTicks(tickLower_mint, tickUpper_mint), ());
-        const slot0_: Slot0 = slot0; // SLOAD for gas optimization
+        const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
         // position := _updatePosition(
         //     recipient_mint,
         //     tickLower_mint,
@@ -768,14 +825,16 @@ entry mint(
         if (amount_mint <> 0) then begin
             const time: nat = blockTimestamp_();
             
-            // (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observeSingle(
-            //     time,
-            //     0,
-            //     slot0.tick,
-            //     slot0.observationIndex,
-            //     liquidity,
-            //     slot0.observationCardinality
-            // );
+            const retVal : (int * nat) = observeSingle(
+                time,
+                0,
+                slot0.tick,
+                slot0.observationIndex,
+                liquidity,
+                slot0.observationCardinality
+            );
+            var tickCumulative = retVal[0];
+            var secondsPerLiquidityCumulativeX128 = retVal[1];
 
             // flippedLower = ticks.update(
             //     tickLower,
@@ -789,6 +848,53 @@ entry mint(
             //     false,
             //     maxLiquidityPerTick
             // );
+
+            // function update(
+            //     mapping(int24 => Tick.Info) storage self,
+            //     int24 tick,
+            //     int24 tickCurrent,
+            //     int128 liquidityDelta,
+            //     uint256 feeGrowthGlobal0X128,
+            //     uint256 feeGrowthGlobal1X128,
+            //     uint160 secondsPerLiquidityCumulativeX128,
+            //     int56 tickCumulative,
+            //     uint32 time,
+            //     bool upper,
+            //     uint128 maxLiquidity
+            // ) internal returns (bool flipped) {
+            var info_flippedLower = ticks[tickLower_mint].info; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
+
+            var liquidityGrossBefore = info_flippedLower.liquidityGross;
+            var liquidityGrossAfter = liquidityGrossBefore + amount_mint;
+
+            do_require(liquidityGrossAfter <= maxLiquidityPerTick, "LO");
+
+            flippedLower := (liquidityGrossAfter = 0) <> (liquidityGrossBefore = 0);
+
+            if (liquidityGrossBefore = 0) then begin
+                // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
+                if (tickLower_mint <= slot0_.tick) then begin
+                    info_flippedLower.feeGrowthOutside0X128 := feeGrowthGlobal0X128_;
+                    info_flippedLower.feeGrowthOutside1X128 := feeGrowthGlobal1X128_;
+                    info_flippedLower.secondsPerLiquidityOutsideX128 := secondsPerLiquidityCumulativeX128;
+                    info_flippedLower.tickCumulativeOutside := tickCumulative;
+                    info_flippedLower.secondsOutside := time
+                end;
+                info_flippedLower.%initialized := true
+            end;
+
+            info_flippedLower.liquidityGross := liquidityGrossAfter;
+
+            // when the lower (upper) tick is crossed left to right (right to left), liquidity must be added (removed)
+            // info_flippedLower.liquidityNet := upper
+            //     ? info_flippedLower.liquidityNet - amount_mint
+            //     : info_flippedLower.liquidityNet + amount_mint;
+            info_flippedLower.liquidityNet := info_flippedLower.liquidityNet + amount_mint;
+
+            ticks[tickLower_mint].info := info_flippedLower; // TODO - done-info_flippedLower-storage
+            
+            // }
+
             // flippedUpper = ticks.update(
             //     tickUpper,
             //     tick,
@@ -802,21 +908,71 @@ entry mint(
             //     maxLiquidityPerTick
             // );
 
-            // if (flippedLower) {
-            //     tickBitmap.flipTick(tickLower, tickSpacing);
-            // }
-            // if (flippedUpper) {
-            //     tickBitmap.flipTick(tickUpper, tickSpacing);
-            // }
-        end
+            var info_flippedUpper = ticks[tickUpper_mint].info; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
 
-    //     (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = ticks.getFeeGrowthInside(
-    //         tickLower,
-    //         tickUpper,
-    //         tick,
-    //         _feeGrowthGlobal0X128,
-    //         _feeGrowthGlobal1X128
-    //     );
+            liquidityGrossBefore := info_flippedUpper.liquidityGross;
+            liquidityGrossAfter := liquidityGrossBefore + amount_mint;
+
+            do_require(liquidityGrossAfter <= maxLiquidityPerTick, "LO");
+
+            flippedUpper := (liquidityGrossAfter = 0) <> (liquidityGrossBefore = 0);
+
+            if (liquidityGrossBefore = 0) then begin
+                // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
+                if (tickUpper_mint <= slot0_.tick) then begin
+                    info_flippedUpper.feeGrowthOutside0X128 := feeGrowthGlobal0X128;
+                    info_flippedUpper.feeGrowthOutside1X128 := feeGrowthGlobal1X128;
+                    info_flippedUpper.secondsPerLiquidityOutsideX128 := secondsPerLiquidityCumulativeX128;
+                    info_flippedUpper.tickCumulativeOutside := tickCumulative;
+                    info_flippedUpper.secondsOutside := time;
+                end;
+                info_flippedUpper.%initialized := true;
+            end;
+
+            info_flippedUpper.liquidityGross := liquidityGrossAfter;
+
+            // when the lower (upper) tick is crossed left to right (right to left), liquidity must be added (removed)
+            info_flippedLower.liquidityNet := info_flippedLower.liquidityNet - amount_mint;
+
+            ticks[tickUpper_mint].info := info_flippedUpper; // TODO - done-info_flippedLower-storage
+
+            if (flippedLower) then begin
+                do_require(tickLower_mint % tickSpacing = 0, ()); // ensure that the tick is spaced
+                const retVal_: (int * nat) ?= (tickLower_mint div tickSpacing) /% 256 : INVALID_INT_NAT;
+                const wordPos = retVal_[0];
+                const bitPos = retVal_[1];
+                const mask = 1 <<| bitPos;
+                const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
+                if posVal = 1 then
+                    tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_NAT
+                else
+                    tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+            end;
+
+            if (flippedUpper) then begin
+                do_require(tickUpper_mint % tickSpacing = 0, ()); // ensure that the tick is spaced
+                const retVal_: (int * nat) ?= (tickUpper_mint div tickSpacing) /% 256 : INVALID_INT_NAT;
+                const wordPos = retVal_[0];
+                const bitPos = retVal_[1];
+                const mask = 1 <<| bitPos;
+                const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
+                if posVal = 1 then
+                    tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_NAT
+                else
+                    tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+            end;
+        end;
+
+        const retVal_getFeeGrowthInside: (nat * nat) = getFeeGrowthInside(
+            tickLower_mint,
+            tickUpper_mint,
+            slot0_.tick,
+            feeGrowthGlobal0X128_,
+            feeGrowthGlobal1X128_
+        );
+
+        const feeGrowthInside0X128 = retVal_getFeeGrowthInside[0];
+        const feeGrowthInside1X128 = retVal_getFeeGrowthInside[1];
 
     //     position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
 
