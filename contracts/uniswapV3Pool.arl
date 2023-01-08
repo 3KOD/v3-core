@@ -26,7 +26,10 @@ constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
+constant RESOLUTION: nat = 96
+constant Q96: nat = 1 <<| 96
 constant Q128: nat = 1 <<| 128
+constant Q256: nat = 1 <<| 256
 constant UnixStartTime: date = 1970-01-01
 constant original: address = self_address
 
@@ -759,6 +762,144 @@ function getFeeGrowthInside(
     return ((feeGrowthInside0X128, feeGrowthInside1X128))
 }
 
+/// @notice Calculates sqrt(1.0001^tick) * 2^96
+/// @dev Throws if |tick| > max tick
+/// @param tick The input tick for the above formula
+/// @return sqrtPriceX96 A Fixed point Q64.96 number representing the sqrt of the ratio of the two assets (token1/token0)
+/// at the given tick
+function tickMathGetSqrtRatioAtTick(tick_tickMathGetSqrtRatioAtTick: int) : nat {
+    var absTick = abs(tick_tickMathGetSqrtRatioAtTick);
+    do_require(absTick <= TickMathMAX_TICK, "T");
+
+    var ratio = absTick % 2 <> 0 ? 340265354078544963557816517032075149313 : 340282366920938463463374607431768211456;
+    if ((absTick div (1 <<| 1)) % 2 <> 0) then ratio := (ratio * 340248342086729790484326174814286782778) |>> 128;
+    if ((absTick div (1 <<| 2)) % 2 <> 0) then ratio := (ratio * 340214320654664324051920982716015181260) |>> 128;
+    if ((absTick div (1 <<| 3)) % 2 <> 0) then ratio := (ratio * 340146287995602323631171512101879684304) |>> 128;
+    if ((absTick div (1 <<| 4)) % 2 <> 0) then ratio := (ratio * 340010263488231146823593991679159461444) |>> 128;
+    if ((absTick div (1 <<| 5)) % 2 <> 0) then ratio := (ratio * 339738377640345403697157401104375502016) |>> 128;
+    if ((absTick div (1 <<| 6)) % 2 <> 0) then ratio := (ratio * 339195258003219555707034227454543997025) |>> 128;
+    if ((absTick div (1 <<| 7)) % 2 <> 0) then ratio := (ratio * 338111622100601834656805679988414885971) |>> 128;
+    if ((absTick div (1 <<| 8)) % 2 <> 0) then ratio := (ratio * 335954724994790223023589805789778977700) |>> 128;
+    if ((absTick div (1 <<| 9)) % 2 <> 0) then ratio := (ratio * 331682121138379247127172139078559817300) |>> 128;
+    if ((absTick div (1 <<| 10)) % 2 <> 0) then ratio := (ratio * 323299236684853023288211250268160618739) |>> 128;
+    if ((absTick div (1 <<| 11)) % 2 <> 0) then ratio := (ratio * 307163716377032989948697243942600083929) |>> 128;
+    if ((absTick div (1 <<| 12)) % 2 <> 0) then ratio := (ratio * 277268403626896220162999269216087595045) |>> 128;
+    if ((absTick div (1 <<| 13)) % 2 <> 0) then ratio := (ratio * 225923453940442621947126027127485391333) |>> 128;
+    if ((absTick div (1 <<| 14)) % 2 <> 0) then ratio := (ratio * 149997214084966997727330242082538205943) |>> 128;
+    if ((absTick div (1 <<| 15)) % 2 <> 0) then ratio := (ratio * 66119101136024775622716233608466517926) |>> 128;
+    if ((absTick div (1 <<| 16)) % 2 <> 0) then ratio := (ratio * 12847376061809297530290974190478138313) |>> 128;
+    if ((absTick div (1 <<| 17)) % 2 <> 0) then ratio := (ratio * 485053260817066172746253684029974020) |>> 128;
+    if ((absTick div (1 <<| 18)) % 2 <> 0) then ratio := (ratio * 691415978906521570653435304214168) |>> 128;
+    if ((absTick div (1 <<| 19)) % 2 <> 0) then ratio := (ratio * 1404880482679654955896180642) |>> 128;
+
+    if (tick_tickMathGetSqrtRatioAtTick > 0) then ratio := abs(Q256 - 1) div ratio;
+
+    // this divides by 1<<32 rounding up to go from a Q128.128 to a Q128.96.
+    // we then downcast because we know the result always fits within 160 bits due to our tick input constraint
+    // we round up in the division so getTickAtSqrtRatio of the output price is always consistent
+    const sqrtPriceX96_val = (ratio |>> 32) + ((ratio % (1 <<| 32) = 0) ? 0 : 1);
+
+    return sqrtPriceX96_val
+}
+
+/// @notice Gets the amount0 delta between two prices
+/// @dev Calculates liquidity / sqrt(lower) - liquidity / sqrt(upper),
+/// i.e. liquidity * (sqrt(upper) - sqrt(lower)) / (sqrt(upper) * sqrt(lower))
+/// @param sqrtRatioAX96_sPMGA0D A sqrt price
+/// @param sqrtRatioBX96_sPMGA0D Another sqrt price
+/// @param liquidity The amount of usable liquidity
+/// @param roundUp_sPMGA0D Whether to round the amount up or down
+/// @return amount0 Amount of token0 required to cover a position of size liquidity between the two passed prices
+function sqrtPriceMathGetAmount0Delta_round(
+    sqrtRatioAX96_sPMGA0D: nat,
+    sqrtRatioBX96_sPMGA0D: nat,
+    liquidity_sPMGA0D: nat,
+    roundUp_sPMGA0D: bool
+) : nat {
+    var sqrtRatioAX96_val = sqrtRatioAX96_sPMGA0D;
+    var sqrtRatioBX96_val = sqrtRatioBX96_sPMGA0D;
+    if (sqrtRatioAX96_sPMGA0D > sqrtRatioBX96_sPMGA0D) then begin
+        sqrtRatioAX96_val := sqrtRatioBX96_sPMGA0D;
+        sqrtRatioBX96_val := sqrtRatioAX96_sPMGA0D
+    end;
+
+    const numerator1 = liquidity_sPMGA0D <<| RESOLUTION;
+    const numerator2 ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_NAT;
+
+    do_require(sqrtRatioAX96_val > 0, ());
+
+    if roundUp_sPMGA0D then begin
+        const val1 ?= int_to_nat(ceil(numerator1 * numerator2 / sqrtRatioBX96_val)) : INVALID_NAT;
+        const val2 ?= int_to_nat(ceil(val1 / sqrtRatioAX96_val)) : INVALID_NAT;
+        return val2
+    end;
+    const retVal = numerator1 * numerator2 div sqrtRatioBX96_val div sqrtRatioAX96_val;
+    return retVal
+}
+
+/// @notice Helper that gets signed token0 delta
+/// @param sqrtRatioAX96 A sqrt price
+/// @param sqrtRatioBX96 Another sqrt price
+/// @param liquidity The change in liquidity for which to compute the amount0 delta
+/// @return amount0 Amount of token0 corresponding to the passed liquidityDelta between the two prices
+function sqrtPriceMathGetAmount0Delta(
+    sqrtRatioAX96_sPMGA0D: nat,
+    sqrtRatioBX96_sPMGA0D: nat,
+    liquidity_sPMGA0D: int
+) : int {
+    if liquidity_sPMGA0D < 0 then begin
+        const retVal = -sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), false);
+        return retVal
+    end;
+    return sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), true)
+}
+
+/// @notice Gets the amount1 delta between two prices
+/// @dev Calculates liquidity_sPMGA1D * (sqrt(upper) - sqrt(lower))
+/// @param sqrtRatioAX96_sPMGA1D A sqrt price
+/// @param sqrtRatioBX96_sPMGA1D Another sqrt price
+/// @param liquidity_sPMGA1D The amount of usable liquidity_sPMGA1D
+/// @param roundUp_sPMGA1D Whether to round the amount up, or down
+/// @return amount1 Amount of token1 required to cover a position of size liquidity_sPMGA1D between the two passed prices
+function sqrtPriceMathGetAmount1Delta_round(
+    sqrtRatioAX96_sPMGA1D: nat,
+    sqrtRatioBX96_sPMGA1D: nat,
+    liquidity_sPMGA1D: nat,
+    roundUp_sPMGA1D: bool
+) : nat {
+    var sqrtRatioAX96_val = sqrtRatioAX96_sPMGA1D;
+    var sqrtRatioBX96_val = sqrtRatioBX96_sPMGA1D;
+    if (sqrtRatioAX96_sPMGA1D > sqrtRatioBX96_sPMGA1D) then begin
+        sqrtRatioAX96_val := sqrtRatioBX96_sPMGA1D;
+        sqrtRatioBX96_val := sqrtRatioAX96_sPMGA1D
+    end;
+
+    if roundUp_sPMGA1D then begin
+        const val ?= int_to_nat((ceil(liquidity_sPMGA1D * (sqrtRatioBX96_val - sqrtRatioAX96_val) / Q96))) : INVALID_NAT;
+        return val
+    end;
+    var retVal ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_NAT;
+    retVal := liquidity_sPMGA1D * retVal div Q96;
+    return retVal
+}
+
+/// @notice Helper that gets signed token1 delta
+/// @param sqrtRatioAX96 A sqrt price
+/// @param sqrtRatioBX96 Another sqrt price
+/// @param liquidity The change in liquidity for which to compute the amount1 delta
+/// @return amount1 Amount of token1 corresponding to the passed liquidityDelta between the two prices
+function sqrtPriceMathGetAmount1Delta(
+    sqrtRatioAX96_sPMGA1D: nat,
+    sqrtRatioBX96_sPMGA1D: nat,
+    liquidity_sPMGA1D: int
+) : int {
+    if liquidity_sPMGA1D < 0 then begin
+        const retVal = -sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), false);
+        return retVal
+    end;
+    return sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), true)
+}
+
 /// @inheritdoc IUniswapV3PoolActions
 /// @dev noDelegateCall is applied indirectly via _modifyPosition
 entry mint(
@@ -799,7 +940,7 @@ entry mint(
         //     tickLower_mint,
         //     tickUpper_mint,
         //     amount_mint,
-        //     _slot0.tick
+        //     slot0_.tick
         // );
         
 
@@ -1020,70 +1161,117 @@ entry mint(
         //         ticks.clear(tickUpper)
         // end
 
+        // return position
+        positions[(recipient_mint, tickLower_mint, tickUpper_mint)].positionInfo := position;
+        var amount0: int = 0;
+        var amount1: int = 0;
+
+        if (amount_mint <> 0) then begin
+            if (slot0_.tick < tickLower_mint) then begin
+                // current tick is below the passed range; liquidity can only become in range by crossing from left to
+                // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
+                amount0 := sqrtPriceMathGetAmount0Delta(
+                    tickMathGetSqrtRatioAtTick(tickLower_mint),
+                    tickMathGetSqrtRatioAtTick(tickUpper_mint),
+                    amount_mint
+                );
+            end else begin 
+                if (slot0_.tick < tickUpper_mint) then begin
+                    // current tick is inside the passed range
+                    var liquidityBefore = liquidity; // SLOAD for gas optimization
+
+                    // write an oracle entry
+                    // (slot0.observationIndex, slot0.observationCardinality) = observations.write(
+                    //     slot0_.observationIndex,
+                    //     blockTimestamp_(),
+                    //     slot0_.tick,
+                    //     liquidityBefore,
+                    //     slot0_.observationCardinality,
+                    //     slot0_.observationCardinalityNext
+                    // );
+
+                    /// @notice Writes an oracle observation to the array
+                    /// @dev Writable at most once per block. Index represents the most recently written element. cardinality and index must be tracked externally.
+                    /// If the index is at the end of the allowable array length (according to cardinality), and the next cardinality
+                    /// is greater than the current one, cardinality may be increased. This restriction is created to preserve ordering.
+                    /// @param self The stored oracle array
+                    /// @param index The index of the observation that was most recently written to the observations array
+                    /// @param blockTimestamp The timestamp of the new observation
+                    /// @param tick The active tick at the time of the new observation
+                    /// @param liquidity The total in-range liquidity at the time of the new observation
+                    /// @param cardinality The number of populated elements in the oracle array
+                    /// @param cardinalityNext The new length of the oracle array, independent of population
+                    /// @return indexUpdated The new index of the most recently written element in the oracle array
+                    /// @return cardinalityUpdated The new cardinality of the oracle array
+                    // function write(
+                    //     Observation[65535] storage self,
+                    //     uint16 index,
+                    //     uint32 blockTimestamp,
+                    //     int24 tick,
+                    //     uint128 liquidity,
+                    //     uint16 cardinality,
+                    //     uint16 cardinalityNext
+                    // ) internal returns (uint16 indexUpdated, uint16 cardinalityUpdated) {
+                    const last ?= nth(observations, slot0_.observationIndex) : INVALID_RECORD;
+
+                    // early return if we've already written an observation this block
+                    if (last.blockTimestamp_Obs = blockTimestamp_()) then begin
+                        slot0.observationIndex := slot0_.observationIndex;
+                        slot0.observationCardinality := slot0_.observationCardinality
+                    end;
+
+                    var indexUpdated = 0;
+                    var cardinalityUpdated = 0;
+                    // if the conditions are right, we can bump the cardinality
+                    if (slot0_.observationCardinalityNext > slot0_.observationCardinality and slot0_.observationIndex = (slot0_.observationCardinality - 1)) then 
+                        cardinalityUpdated := slot0_.observationCardinalityNext
+                    else
+                        cardinalityUpdated := slot0_.observationCardinality;
+
+                    indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
+                    // nth(observations, indexUpdated) := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore); // TODO +
+                    slot0.observationIndex := indexUpdated;
+                    slot0.observationCardinality := cardinalityUpdated;
+                    // }
+
+                    amount0 := sqrtPriceMathGetAmount0Delta(
+                        slot0_.sqrtPriceX96,
+                        tickMathGetSqrtRatioAtTick(tickUpper_mint),
+                        amount_mint
+                    );
+                    amount1 := sqrtPriceMathGetAmount1Delta(
+                        tickMathGetSqrtRatioAtTick(tickLower_mint),
+                        slot0_.sqrtPriceX96,
+                        amount_mint
+                    );
+
+                    liquidity := liquidityBefore + amount_mint
+                end else begin
+                    // current tick is above the passed range; liquidity can only become in range by crossing from right to
+                    // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
+                    amount1 := sqrtPriceMathGetAmount1Delta(
+                        tickMathGetSqrtRatioAtTick(tickLower_mint),
+                        tickMathGetSqrtRatioAtTick(tickUpper_mint),
+                        amount_mint
+                    )
+                end
+            end
+        end;
+
+        const amount0_nat ?= int_to_nat(amount0) : INVALID_NAT;
+        const amount1_nat ?= int_to_nat(amount1) : INVALID_NAT;
+
+        var balance0Before: nat = 0;
+        var balance1Before: nat = 0;
+        // if (amount0_nat > 0) then balance0Before := balance0();
+        // if (amount1_nat > 0) then balance1Before := balance1();
+        // IUniswapV3MintCallback(caller).uniswapV3MintCallback(amount0_nat, amount1_nat, data_mint);
+        // if (amount0_nat > 0) then do_require(balance0Before + amount0_nat <= balance0(), "M0");
+        // if (amount1_nat > 0) then do_require(balance1Before + amount1_nat <= balance1(), "M1");
+
+        slot0.unlocked := true;
+        emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat})
     }
-
-
-
-    // if (params.liquidityDelta != 0) {
-    //     if (_slot0.tick < params.tickLower) {
-    //         // current tick is below the passed range; liquidity can only become in range by crossing from left to
-    //         // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
-    //         amount0 = SqrtPriceMath.getAmount0Delta(
-    //             TickMath.getSqrtRatioAtTick(params.tickLower),
-    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
-    //             params.liquidityDelta
-    //         );
-    //     } else if (_slot0.tick < params.tickUpper) {
-    //         // current tick is inside the passed range
-    //         uint128 liquidityBefore = liquidity; // SLOAD for gas optimization
-
-    //         // write an oracle entry
-    //         (slot0.observationIndex, slot0.observationCardinality) = observations.write(
-    //             _slot0.observationIndex,
-    //             blockTimestamp_(),
-    //             _slot0.tick,
-    //             liquidityBefore,
-    //             _slot0.observationCardinality,
-    //             _slot0.observationCardinalityNext
-    //         );
-
-    //         amount0 = SqrtPriceMath.getAmount0Delta(
-    //             _slot0.sqrtPriceX96,
-    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
-    //             params.liquidityDelta
-    //         );
-    //         amount1 = SqrtPriceMath.getAmount1Delta(
-    //             TickMath.getSqrtRatioAtTick(params.tickLower),
-    //             _slot0.sqrtPriceX96,
-    //             params.liquidityDelta
-    //         );
-
-    //         liquidity = LiquidityMath.addDelta(liquidityBefore, params.liquidityDelta);
-    //     } else {
-    //         // current tick is above the passed range; liquidity can only become in range by crossing from right to
-    //         // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
-    //         amount1 = SqrtPriceMath.getAmount1Delta(
-    //             TickMath.getSqrtRatioAtTick(params.tickLower),
-    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
-    //             params.liquidityDelta
-    //         );
-    //     }
-    // }
-
-    // amount0 = uint256(amount0Int);
-    // amount1 = uint256(amount1Int);
-
-    // uint256 balance0Before;
-    // uint256 balance1Before;
-    // if (amount0 > 0) balance0Before = balance0();
-    // if (amount1 > 0) balance1Before = balance1();
-    // IUniswapV3MintCallback(caller).uniswapV3MintCallback(amount0, amount1, data);
-    // if (amount0 > 0) require(balance0Before.add(amount0) <= balance0(), "M0");
-    // if (amount1 > 0) require(balance1Before.add(amount1) <= balance1(), "M1");
-
-    // slot0.unlocked := true;
-
-    // emit<Mint>({caller; recipient; tickLower_mint; tickUpper_mint; amount_mint; amount0_mint; amount1_mint})
 }
 
 // /// @inheritdoc IUniswapV3PoolActions
