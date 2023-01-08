@@ -20,8 +20,12 @@ archetype uniswapV3Pool(factory: address, token0: address, token1: address)
 // import IUniswapV3SwapCallback from "./interfaces/callback/IUniswapV3SwapCallback.tz"
 // import IUniswapV3FlashCallback from "./interfaces/callback/IUniswapV3FlashCallback.tz"
 
+constant INVALID_NAT             : string = "INVALID_NAT"
+constant INVALID_RECORD          : string = "INVALID_RECORD"
+
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
+constant UnixStartTime: date = 1970-01-01
 constant original: address = self_address
 
 function noDelegateCall() : bool {
@@ -135,8 +139,10 @@ record PositionInfo {
     tokensOwed1_PosInfo: nat;
 } as ((liquidity, (feeGrowthInside0LastX128, feeGrowthInside1LastX128), (tokensOwed0, tokensOwed1)))
 /// @inheritdoc IUniswapV3PoolState
-asset positions identified by positionId to big_map {
-    positionId: bytes;
+asset positions identified by positionId_owner positionId_tickLower positionId_tickUpper to big_map {
+    positionId_owner: address;
+    positionId_tickLower: int;
+    positionId_tickUpper: int;
     positionInfo: PositionInfo;
 }
 record Observation {
@@ -148,7 +154,7 @@ record Observation {
     secondsPerLiquidityCumulativeX128_Obs: nat;
     // whether or not the observation is initialized
     initialized_Obs: bool;
-} as ((blockTimestamp, tickCumulative, secondsPerLiquidityCumulativeX128, %initialized))
+} as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
 /// @inheritdoc IUniswapV3PoolState
 // Oracle.Observation[65535] public override observations;
 variable observations: list<Observation> = []
@@ -158,9 +164,9 @@ variable observations: list<Observation> = []
 /// we use balance checks to determine the payment status of interactions such as mint, swap and flash.
 // function lock() {
 //     // do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     // slot0.unlocked = false;
+//     // slot0.unlocked := false;
 //     // _;
-//     // slot0.unlocked = true;
+//     // slot0.unlocked := true;
 // }
 
 /// @dev Prevents calling a function from anyone except the address returned by IUniswapV3Factory#owner()
@@ -179,8 +185,9 @@ function checkTicks(tickLower: int, tickUpper: int): bool {
 }
 
 /// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
-view blockTimestamp_(): date {
-    return now
+view blockTimestamp_(): nat {
+    const timestamp ?= int_to_nat((now - UnixStartTime) div 1s) : INVALID_NAT;
+    return timestamp
     // return uint32(block.timestamp); // truncation is desired
 }
 
@@ -209,29 +216,29 @@ view blockTimestamp_(): date {
 // }
 
 /// @inheritdoc IUniswapV3PoolDerivedState
-// view snapshotCumulativesInside(tickLower: int, tickUpper: int)
-//     /* external
-//     view
-//     override
-//     returns */ : {
-//         /* tickCumulativeInside: */ int,
-//         /* secondsPerLiquidityInsideX128: */ nat,
+// view snapshotCumulativesInside(tickLower: int, tickUpper: int): (
+//         /* tickCumulativeInside: */ int *
+//         /* secondsPerLiquidityInsideX128: */ nat *
 //         /* secondsInside: */ nat
-//     }
+// )
 // {
-//     require {snapshotCumulativesInside1: noDelegateCall();}
-//     require {snapshotCumulativesInside2: checkTicks(tickLower, tickUpper);}
+//     var retVal: (int * nat * nat) = (0,0,0);
+//     if noDelegateCall() = false then
+//         return retVal
+//     // return (0,0,0)
+//     // if checkTicks(tickLower, tickUpper) = false then
+//     //     return (0,0,0)
 
-//     // int56 tickCumulativeLower;
-//     // int56 tickCumulativeUpper;
-//     // uint160 secondsPerLiquidityOutsideLowerX128;
-//     // uint160 secondsPerLiquidityOutsideUpperX128;
-//     // uint32 secondsOutsideLower;
-//     // uint32 secondsOutsideUpper;
+//     // tickCumulativeLower: int;
+//     // tickCumulativeUpper: int;
+//     // secondsPerLiquidityOutsideLowerX128: nat;
+//     // secondsPerLiquidityOutsideUpperX128: nat;
+//     // secondsOutsideLower: nat;
+//     // secondsOutsideUpper: nat;
 
 //     // {
-//     //     Tick.Info storage lower = ticks[tickLower];
-//     //     Tick.Info storage upper = ticks[tickUpper];
+//     //     var lower: TickInfo = ticks[tickLower];
+//     //     var upper: TickInfo = ticks[tickUpper];
 //     //     bool initializedLower;
 //     //     (tickCumulativeLower, secondsPerLiquidityOutsideLowerX128, secondsOutsideLower, initializedLower) = (
 //     //         lower.tickCumulativeOutside,
@@ -310,7 +317,7 @@ view blockTimestamp_(): date {
 //     // override
 // {
 //     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked = false;
+//     slot0.unlocked := false;
 //     require {increaseObservationCardinalityNext: noDelegateCall();}
 //     // uint16 observationCardinalityNextOld = slot0.observationCardinalityNext; // for the event
 //     // uint16 observationCardinalityNextNew = observations.grow(
@@ -320,7 +327,7 @@ view blockTimestamp_(): date {
 //     // slot0.observationCardinalityNext = observationCardinalityNextNew;
 //     // if (observationCardinalityNextOld != observationCardinalityNextNew)
 //     //     emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
-//     slot0.unlocked = true;
+//     slot0.unlocked := true;
 // }
 
 // // /// @inheritdoc IUniswapV3PoolActions
@@ -345,25 +352,25 @@ view blockTimestamp_(): date {
 // //     // emit Initialize(sqrtPriceX96, tick);
 // // }
 
-// // record ModifyPositionParams {
-// //     // the address that owns the position
-// //     owner: address;
-// //     // the lower and upper tick of the position
-// //     tickLower: int;
-// //     tickUpper: int;
-// //     // any change in liquidity
-// //     liquidityDelta: int;
-// // }
+record ModifyPositionParams {
+    // the address that owns the position
+    owner_ModifyPosParam: address;
+    // the lower and upper tick of the position
+    tickLower_ModifyPosParam: int;
+    tickUpper_ModifyPosParam: int;
+    // any change in liquidity
+    liquidityDelta_ModifyPosParam: int;
+} as ((owner, tickLower, tickUpper, liquidityDelta))
 
-// /// @dev Effect some changes to a position
-// /// @param params the position details and the change to the position's liquidity to effect
-// /// @return position a storage pointer referencing the position with the given owner and tick range
-// /// @return amount0 the amount of token0 owed to the pool, negative if the pool should pay the recipient
-// /// @return amount1 the amount of token1 owed to the pool, negative if the pool should pay the recipient
+/// @dev Effect some changes to a position
+/// @param params the position details and the change to the position's liquidity to effect
+/// @return position a storage pointer referencing the position with the given owner and tick range
+/// @return amount0 the amount of token0 owed to the pool, negative if the pool should pay the recipient
+/// @return amount1 the amount of token1 owed to the pool, negative if the pool should pay the recipient
 // getter _modifyPosition(params: ModifyPositionParams)
 //     // private
 //     : {
-//         Position.Info, /* Position.Info storage position */,
+//         PositionInfo, /* Position.Info storage position */,
 //         nat, /* int256 amount0 */,
 //         nat, /* int256 amount1 */
 //     }
@@ -428,126 +435,466 @@ view blockTimestamp_(): date {
 //     // }
 // }
 
-// // /// @dev Gets and updates a position with the given liquidity delta
-// // /// @param owner the owner of the position
-// // /// @param tickLower the lower tick of the position's tick range
-// // /// @param tickUpper the upper tick of the position's tick range
-// // /// @param tick the current tick, passed to avoid sloads
-// // getter _updatePosition(
-// //     owner: address,
-// //     tickLower: int,
-// //     tickUpper: int,
-// //     liquidityDelta: int,
-// //     tick: int
-// // ) /* private returns */ : Position.Info /* storage position */ {
-// //     // position = positions.get(owner, tickLower, tickUpper);
+/// @dev Gets and updates a position with the given liquidity delta
+/// @param owner the owner of the position
+/// @param tickLower the lower tick of the position's tick range
+/// @param tickUpper the upper tick of the position's tick range
+/// @param tick the current tick, passed to avoid sloads
+// getter _updatePosition(
+//     owner: address,
+//     tickLower: int,
+//     tickUpper: int,
+//     liquidityDelta: int,
+//     tick: int
+// ) /* private returns */ : PositionInfo /* storage position */ {
+//     // position = positions.get(owner, tickLower, tickUpper);
 
-// //     // uint256 _feeGrowthGlobal0X128 = feeGrowthGlobal0X128; // SLOAD for gas optimization
-// //     // uint256 _feeGrowthGlobal1X128 = feeGrowthGlobal1X128; // SLOAD for gas optimization
+//     // uint256 _feeGrowthGlobal0X128 = feeGrowthGlobal0X128; // SLOAD for gas optimization
+//     // uint256 _feeGrowthGlobal1X128 = feeGrowthGlobal1X128; // SLOAD for gas optimization
 
-// //     // // if we need to update the ticks, do it
-// //     // bool flippedLower;
-// //     // bool flippedUpper;
-// //     // if (liquidityDelta != 0) {
-// //     //     uint32 time = blockTimestamp_();
-// //     //     (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observations.observeSingle(
-// //     //         time,
-// //     //         0,
-// //     //         slot0.tick,
-// //     //         slot0.observationIndex,
-// //     //         liquidity,
-// //     //         slot0.observationCardinality
-// //     //     );
+//     // // if we need to update the ticks, do it
+//     // bool flippedLower;
+//     // bool flippedUpper;
+//     // if (liquidityDelta != 0) {
+//     //     uint32 time = blockTimestamp_();
+//     //     (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observations.observeSingle(
+//     //         time,
+//     //         0,
+//     //         slot0.tick,
+//     //         slot0.observationIndex,
+//     //         liquidity,
+//     //         slot0.observationCardinality
+//     //     );
 
-// //     //     flippedLower = ticks.update(
-// //     //         tickLower,
-// //     //         tick,
-// //     //         liquidityDelta,
-// //     //         _feeGrowthGlobal0X128,
-// //     //         _feeGrowthGlobal1X128,
-// //     //         secondsPerLiquidityCumulativeX128,
-// //     //         tickCumulative,
-// //     //         time,
-// //     //         false,
-// //     //         maxLiquidityPerTick
-// //     //     );
-// //     //     flippedUpper = ticks.update(
-// //     //         tickUpper,
-// //     //         tick,
-// //     //         liquidityDelta,
-// //     //         _feeGrowthGlobal0X128,
-// //     //         _feeGrowthGlobal1X128,
-// //     //         secondsPerLiquidityCumulativeX128,
-// //     //         tickCumulative,
-// //     //         time,
-// //     //         true,
-// //     //         maxLiquidityPerTick
-// //     //     );
+//     //     flippedLower = ticks.update(
+//     //         tickLower,
+//     //         tick,
+//     //         liquidityDelta,
+//     //         _feeGrowthGlobal0X128,
+//     //         _feeGrowthGlobal1X128,
+//     //         secondsPerLiquidityCumulativeX128,
+//     //         tickCumulative,
+//     //         time,
+//     //         false,
+//     //         maxLiquidityPerTick
+//     //     );
+//     //     flippedUpper = ticks.update(
+//     //         tickUpper,
+//     //         tick,
+//     //         liquidityDelta,
+//     //         _feeGrowthGlobal0X128,
+//     //         _feeGrowthGlobal1X128,
+//     //         secondsPerLiquidityCumulativeX128,
+//     //         tickCumulative,
+//     //         time,
+//     //         true,
+//     //         maxLiquidityPerTick
+//     //     );
 
-// //     //     if (flippedLower) {
-// //     //         tickBitmap.flipTick(tickLower, tickSpacing);
-// //     //     }
-// //     //     if (flippedUpper) {
-// //     //         tickBitmap.flipTick(tickUpper, tickSpacing);
-// //     //     }
-// //     // }
+//     //     if (flippedLower) {
+//     //         tickBitmap.flipTick(tickLower, tickSpacing);
+//     //     }
+//     //     if (flippedUpper) {
+//     //         tickBitmap.flipTick(tickUpper, tickSpacing);
+//     //     }
+//     // }
 
-// //     // (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = ticks.getFeeGrowthInside(
-// //     //     tickLower,
-// //     //     tickUpper,
-// //     //     tick,
-// //     //     _feeGrowthGlobal0X128,
-// //     //     _feeGrowthGlobal1X128
-// //     // );
-
-// //     // position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
-
-// //     // // clear any tick data that is no longer needed
-// //     // if (liquidityDelta < 0) {
-// //     //     if (flippedLower) {
-// //     //         ticks.clear(tickLower);
-// //     //     }
-// //     //     if (flippedUpper) {
-// //     //         ticks.clear(tickUpper);
-// //     //     }
-// //     // }
-// // }
-
-// /// @inheritdoc IUniswapV3PoolActions
-// /// @dev noDelegateCall is applied indirectly via _modifyPosition
-// getter mint(
-//     /* address */ recipient: address,
-//     /* int24 */ tickLower: int,
-//     /* int24 */ tickUpper: int,
-//     /* uint128 */ amount: nat,
-//     /* bytes calldata */ data: bytes
-// ) /* external override returns */ : (nat /* uint256 amount0 */, nat /* uint256 amount1 */) {
-//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked = false;
-//     // require(amount > 0);
-//     // (, int256 amount0Int, int256 amount1Int) = _modifyPosition(
-//     //     ModifyPositionParams({
-//     //         owner: recipient,
-//     //         tickLower: tickLower,
-//     //         tickUpper: tickUpper,
-//     //         liquidityDelta: int256(amount).toInt128()
-//     //     })
+//     // (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = ticks.getFeeGrowthInside(
+//     //     tickLower,
+//     //     tickUpper,
+//     //     tick,
+//     //     _feeGrowthGlobal0X128,
+//     //     _feeGrowthGlobal1X128
 //     // );
 
-//     // amount0 = uint256(amount0Int);
-//     // amount1 = uint256(amount1Int);
+//     // position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
 
-//     // uint256 balance0Before;
-//     // uint256 balance1Before;
-//     // if (amount0 > 0) balance0Before = balance0();
-//     // if (amount1 > 0) balance1Before = balance1();
-//     // IUniswapV3MintCallback(msg.sender).uniswapV3MintCallback(amount0, amount1, data);
-//     // if (amount0 > 0) require(balance0Before.add(amount0) <= balance0(), 'M0');
-//     // if (amount1 > 0) require(balance1Before.add(amount1) <= balance1(), 'M1');
-
-//     // emit Mint(msg.sender, recipient, tickLower, tickUpper, amount, amount0, amount1);
-//     slot0.unlocked = true;
+//     // // clear any tick data that is no longer needed
+//     // if (liquidityDelta < 0) {
+//     //     if (flippedLower) {
+//     //         ticks.clear(tickLower);
+//     //     }
+//     //     if (flippedUpper) {
+//     //         ticks.clear(tickUpper);
+//     //     }
+//     // }
 // }
+
+event Mint {
+    sender_mint_event: address;
+    owner_mint_event: address;
+    tickLower_mint_event: int;
+    tickUpper_mint_event: int;
+    amount_mint_event: nat;
+    amount0_mint_event: nat;
+    amount1_mint_event: nat;
+}
+
+/// @notice comparator for 32-bit timestamps
+/// @dev safe for 0 or 1 overflows, a and b _must_ be chronologically before or equal to time
+/// @param time A timestamp truncated to 32 bits
+/// @param a A comparison timestamp from which to determine the relative position of `time`
+/// @param b From which to determine the relative position of `time`
+/// @return bool Whether `a` is chronologically <= `b`
+function lte(
+    time: nat,
+    a: nat,
+    b: nat
+) : bool {
+    var retVal = false;
+    // if there hasn't been overflow, no need to adjust
+    if (a <= time and b <= time) then begin
+        retVal := a <= b;
+        return retVal
+    end;
+
+    const aAdjusted = a > time ? a : a + 1 <<| 32;
+    const bAdjusted = b > time ? b : b + 1 <<| 32;
+
+    retVal := aAdjusted <= bAdjusted;
+    return retVal
+}
+
+/// @notice Fetches the observations beforeOrAt and atOrAfter a target, i.e. where [beforeOrAt, atOrAfter] is satisfied.
+/// The result may be the same observation, or adjacent observations.
+/// @dev The answer must be contained in the array, used when the target is located within the stored observation
+/// boundaries: older than the most recent observation and younger, or the same age as, the oldest observation
+/// @param self The stored oracle array
+/// @param time The current block.timestamp
+/// @param target The timestamp at which the reserved observation should be for
+/// @param index The index of the observation that was most recently written to the observations array
+/// @param cardinality The number of populated elements in the oracle array
+/// @return beforeOrAt The observation recorded before, or at, the target
+/// @return atOrAfter The observation recorded at, or after, the target
+function binarySearch(
+    time_binarySearch: nat,
+    target_binarySearch: nat,
+    index_binarySearch: nat,
+    cardinality_binarySearch: nat
+) : Observation * Observation {
+    var l = (index_binarySearch + 1) % cardinality_binarySearch; // oldest observation
+    var r = l + cardinality_binarySearch - 1; // newest observation
+    var beforeOrAt: Observation = {0; 0; 0; false};
+    var atOrAfter: Observation = {0; 0; 0; false};
+    var i = 0;
+    while true do 
+        i ?:= int_to_nat((l + r) div 2) : INVALID_NAT;
+
+        beforeOrAt ?:= nth(observations, i % cardinality_binarySearch) : INVALID_RECORD;
+
+        // we've landed on an uninitialized tick, keep searching higher (more recently)
+        if (beforeOrAt.initialized_Obs = false) then
+            l := i + 1
+        else begin
+            atOrAfter ?:= nth(observations, (i + 1) % cardinality_binarySearch) : INVALID_RECORD;
+
+            var targetAtOrAfter = lte(time_binarySearch, beforeOrAt.blockTimestamp_Obs, target_binarySearch);
+
+            // check if we've found the answer!
+            if (targetAtOrAfter and lte(time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) then
+                return ((beforeOrAt, atOrAfter));
+
+            if (targetAtOrAfter = false) then r := i - 1
+            else l := i + 1
+        end;
+    done
+}
+
+function transform(
+    last_transform_param: Observation,
+    blockTimestamp_transform_param: nat,
+    tick_transform_param: int,
+    liquidity_transform_param: nat
+) : Observation {
+    const delta ?= int_to_nat(blockTimestamp_transform_param - last_transform_param.blockTimestamp_Obs) : INVALID_NAT;
+    const tickCumulative_val = last_transform_param.tickCumulative_Obs + tick_transform_param * delta;
+    const secondsPerLiquidityCumulativeX128_val = 
+        last_transform_param.secondsPerLiquidityCumulativeX128_Obs + ((delta <<| 128) div (liquidity_transform_param > 0 ? liquidity_transform_param : 1));
+
+    const retVal: Observation = {
+        blockTimestamp_transform_param;
+        tickCumulative_val;
+        secondsPerLiquidityCumulativeX128_val;
+        true
+    };
+
+    return retVal
+}
+
+function getSurroundingObservations(
+    time_getSurroundingObservations: nat,
+    target_getSurroundingObservations: nat,
+    tick_getSurroundingObservations: int,
+    index_getSurroundingObservations: nat,
+    liquidity_getSurroundingObservations: nat,
+    cardinality_getSurroundingObservations: nat
+) : Observation * Observation {
+    // optimistically set before to the newest observation
+    var beforeOrAt: Observation ?= nth(observations, index_getSurroundingObservations) : INVALID_RECORD;
+    var atOrAfter: Observation = {0; 0; 0; false};
+
+    // if the target is chronologically at or after the newest observation, we can early return
+    if (lte(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations)) then begin
+        if (beforeOrAt.blockTimestamp_Obs = target_getSurroundingObservations) then
+            // if newest observation equals target, we're in the same block, so we can ignore atOrAfter
+            return ((beforeOrAt, atOrAfter))
+        else
+            // otherwise, we need to transform
+            return ((beforeOrAt, transform(beforeOrAt, target_getSurroundingObservations, tick_getSurroundingObservations, liquidity_getSurroundingObservations)))
+    end;
+
+    // now, set before to the oldest observation
+    beforeOrAt ?:= nth(observations, (index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations) : INVALID_RECORD;
+    if (beforeOrAt.initialized_Obs = false) then beforeOrAt ?:= nth(observations, 0) : INVALID_RECORD;
+
+    // ensure that the target is chronologically at or after the oldest observation
+    do_require(lte(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations), "OLD");
+
+    // if we've reached this point, we have to binary search
+    return binarySearch(time_getSurroundingObservations, target_getSurroundingObservations, index_getSurroundingObservations, cardinality_getSurroundingObservations)
+}
+
+function observeSingle(
+    time_observeSingle: nat,
+    secondsAgo_observeSingle: nat,
+    tick_observeSingle: int,
+    index_observeSingle: nat,
+    liquidity_observeSingle: nat,
+    cardinality_observeSingle: nat
+) : int * nat {
+    if (secondsAgo_observeSingle = 0) then begin
+        var last: Observation ?= nth(observations, index_observeSingle) : INVALID_RECORD;
+        if (last.blockTimestamp_Obs <> time_observeSingle) then 
+            last := transform(last, time_observeSingle, tick_observeSingle, liquidity_observeSingle);
+        const val1 = last.tickCumulative_Obs;
+        const val2 = last.secondsPerLiquidityCumulativeX128_Obs;
+        return ((val1, val2))
+    end;
+
+    var target ?= int_to_nat(time_observeSingle - secondsAgo_observeSingle) : INVALID_NAT;
+
+    const retVal = getSurroundingObservations(
+        time_observeSingle,
+        target,
+        tick_observeSingle,
+        index_observeSingle,
+        liquidity_observeSingle,
+        cardinality_observeSingle
+    );
+    const beforeOrAt = retVal[0];
+    const atOrAfter = retVal[1];
+
+    if (target = beforeOrAt.blockTimestamp_Obs) then 
+        // we're at the left boundary
+        return ((beforeOrAt.tickCumulative_Obs, beforeOrAt.secondsPerLiquidityCumulativeX128_Obs));
+    if (target = atOrAfter.blockTimestamp_Obs) then
+        // we're at the right boundary
+        return ((atOrAfter.tickCumulative_Obs, atOrAfter.secondsPerLiquidityCumulativeX128_Obs));
+    // we're in the middle
+    const observationTimeDelta = atOrAfter.blockTimestamp_Obs - beforeOrAt.blockTimestamp_Obs;
+    const targetDelta = target - beforeOrAt.blockTimestamp_Obs;
+    const retVal1 = beforeOrAt.tickCumulative_Obs + ((atOrAfter.tickCumulative_Obs - beforeOrAt.tickCumulative_Obs) div observationTimeDelta) * targetDelta;
+    const retVal2_int = 
+        beforeOrAt.secondsPerLiquidityCumulativeX128_Obs + 
+        (atOrAfter.secondsPerLiquidityCumulativeX128_Obs - beforeOrAt.secondsPerLiquidityCumulativeX128_Obs) * targetDelta div observationTimeDelta;
+    const retVal2 ?= int_to_nat(retVal2_int) : INVALID_NAT;
+    return ((retVal1, retVal2))
+}
+
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev noDelegateCall is applied indirectly via _modifyPosition
+entry mint(
+    /* address */ recipient_mint: address,
+    /* int24 */ tickLower_mint: int,
+    /* int24 */ tickUpper_mint: int,
+    /* uint128 */ amount_mint: nat,
+    /* bytes calldata */ data_mint: bytes
+) 
+// /* external override returns */ : (nat /* uint256 amount0 */ * nat /* uint256 amount1 */) 
+{
+    effect {
+        do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+        slot0.unlocked := false;
+        do_require(amount_mint > 0, ());
+
+        // (, int256 amount0Int, int256 amount1Int) = _modifyPosition(
+        //     ModifyPositionParams({
+        //         owner: recipient,
+        //         tickLower: tickLower,
+        //         tickUpper: tickUpper,
+        //         liquidityDelta: int256(amount).toInt128()
+        //     })
+        // );
+
+        // getter _modifyPosition(params: ModifyPositionParams)
+        // // private
+        // : {
+        //     PositionInfo, /* Position.Info storage position */,
+        //     nat, /* int256 amount0 */,
+        //     nat, /* int256 amount1 */
+        // }
+        do_require(noDelegateCall(), ());
+        do_require(checkTicks(tickLower_mint, tickUpper_mint), ());
+        const slot0_: Slot0 = slot0; // SLOAD for gas optimization
+        // position := _updatePosition(
+        //     recipient_mint,
+        //     tickLower_mint,
+        //     tickUpper_mint,
+        //     amount_mint,
+        //     _slot0.tick
+        // );
+        
+
+        /// @dev Gets and updates a position with the given liquidity delta
+        /// @param owner the owner of the position
+        /// @param tickLower the lower tick of the position's tick range
+        /// @param tickUpper the upper tick of the position's tick range
+        /// @param tick the current tick, passed to avoid sloads
+        // getter _updatePosition(
+        //     owner: address,
+        //     tickLower: int,
+        //     tickUpper: int,
+        //     liquidityDelta: int,
+        //     tick: int
+        // ) /* private returns */ : PositionInfo /* storage position */ {
+        var position = positions[(recipient_mint, tickLower_mint, tickUpper_mint)]?.positionInfo;
+
+        var feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
+        var feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
+
+        // if we need to update the ticks, do it
+        var flippedLower: bool = false;
+        var flippedUpper: bool = false;
+        if (amount_mint <> 0) then begin
+            const time: nat = blockTimestamp_();
+            
+            // (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observeSingle(
+            //     time,
+            //     0,
+            //     slot0.tick,
+            //     slot0.observationIndex,
+            //     liquidity,
+            //     slot0.observationCardinality
+            // );
+
+            // flippedLower = ticks.update(
+            //     tickLower,
+            //     tick,
+            //     liquidityDelta,
+            //     _feeGrowthGlobal0X128,
+            //     _feeGrowthGlobal1X128,
+            //     secondsPerLiquidityCumulativeX128,
+            //     tickCumulative,
+            //     time,
+            //     false,
+            //     maxLiquidityPerTick
+            // );
+            // flippedUpper = ticks.update(
+            //     tickUpper,
+            //     tick,
+            //     liquidityDelta,
+            //     _feeGrowthGlobal0X128,
+            //     _feeGrowthGlobal1X128,
+            //     secondsPerLiquidityCumulativeX128,
+            //     tickCumulative,
+            //     time,
+            //     true,
+            //     maxLiquidityPerTick
+            // );
+
+            // if (flippedLower) {
+            //     tickBitmap.flipTick(tickLower, tickSpacing);
+            // }
+            // if (flippedUpper) {
+            //     tickBitmap.flipTick(tickUpper, tickSpacing);
+            // }
+        end
+
+    //     (uint256 feeGrowthInside0X128, uint256 feeGrowthInside1X128) = ticks.getFeeGrowthInside(
+    //         tickLower,
+    //         tickUpper,
+    //         tick,
+    //         _feeGrowthGlobal0X128,
+    //         _feeGrowthGlobal1X128
+    //     );
+
+    //     position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
+
+    //     // clear any tick data that is no longer needed
+    //     if (liquidityDelta < 0) {
+    //         if (flippedLower) {
+    //             ticks.clear(tickLower);
+    //         }
+    //         if (flippedUpper) {
+    //             ticks.clear(tickUpper);
+    //         }
+    //     }
+
+    }
+
+
+
+    // if (params.liquidityDelta != 0) {
+    //     if (_slot0.tick < params.tickLower) {
+    //         // current tick is below the passed range; liquidity can only become in range by crossing from left to
+    //         // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
+    //         amount0 = SqrtPriceMath.getAmount0Delta(
+    //             TickMath.getSqrtRatioAtTick(params.tickLower),
+    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+    //             params.liquidityDelta
+    //         );
+    //     } else if (_slot0.tick < params.tickUpper) {
+    //         // current tick is inside the passed range
+    //         uint128 liquidityBefore = liquidity; // SLOAD for gas optimization
+
+    //         // write an oracle entry
+    //         (slot0.observationIndex, slot0.observationCardinality) = observations.write(
+    //             _slot0.observationIndex,
+    //             blockTimestamp_(),
+    //             _slot0.tick,
+    //             liquidityBefore,
+    //             _slot0.observationCardinality,
+    //             _slot0.observationCardinalityNext
+    //         );
+
+    //         amount0 = SqrtPriceMath.getAmount0Delta(
+    //             _slot0.sqrtPriceX96,
+    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+    //             params.liquidityDelta
+    //         );
+    //         amount1 = SqrtPriceMath.getAmount1Delta(
+    //             TickMath.getSqrtRatioAtTick(params.tickLower),
+    //             _slot0.sqrtPriceX96,
+    //             params.liquidityDelta
+    //         );
+
+    //         liquidity = LiquidityMath.addDelta(liquidityBefore, params.liquidityDelta);
+    //     } else {
+    //         // current tick is above the passed range; liquidity can only become in range by crossing from right to
+    //         // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
+    //         amount1 = SqrtPriceMath.getAmount1Delta(
+    //             TickMath.getSqrtRatioAtTick(params.tickLower),
+    //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+    //             params.liquidityDelta
+    //         );
+    //     }
+    // }
+
+    // amount0 = uint256(amount0Int);
+    // amount1 = uint256(amount1Int);
+
+    // uint256 balance0Before;
+    // uint256 balance1Before;
+    // if (amount0 > 0) balance0Before = balance0();
+    // if (amount1 > 0) balance1Before = balance1();
+    // IUniswapV3MintCallback(caller).uniswapV3MintCallback(amount0, amount1, data);
+    // if (amount0 > 0) require(balance0Before.add(amount0) <= balance0(), "M0");
+    // if (amount1 > 0) require(balance1Before.add(amount1) <= balance1(), "M1");
+
+    // slot0.unlocked := true;
+
+    // emit<Mint>({caller; recipient; tickLower_mint; tickUpper_mint; amount_mint; amount0_mint; amount1_mint})
+}
 
 // /// @inheritdoc IUniswapV3PoolActions
 // getter collect(
@@ -558,9 +905,9 @@ view blockTimestamp_(): date {
 //     /* uint128 */ amount1Requested: nat
 // ) /* external override returns */ : {nat, nat} /* (uint128 amount0, uint128 amount1) */ {
 //     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked = false;
+//     slot0.unlocked := false;
 //     // // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
-//     // Position.Info storage position = positions.get(msg.sender, tickLower, tickUpper);
+//     // Position.Info storage position = positions.get(caller, tickLower, tickUpper);
 
 //     // amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
 //     // amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
@@ -574,8 +921,8 @@ view blockTimestamp_(): date {
 //     //     TransferHelper.safeTransfer(token1, recipient, amount1);
 //     // }
 
-//     // emit Collect(msg.sender, recipient, tickLower, tickUpper, amount0, amount1);
-//     slot0.unlocked = true;
+//     // emit Collect(caller, recipient, tickLower, tickUpper, amount0, amount1);
+//     slot0.unlocked := true;
 // }
 
 // /// @inheritdoc IUniswapV3PoolActions
@@ -586,10 +933,10 @@ view blockTimestamp_(): date {
 //     /* uint128 */ amount: nat
 // ) /* external override returns */ : {nat, nat} /* (uint256 amount0, uint256 amount1) */ {
 //     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked = false;
+//     slot0.unlocked := false;
 //     // (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
 //     //     ModifyPositionParams({
-//     //         owner: msg.sender,
+//     //         owner: caller,
 //     //         tickLower: tickLower,
 //     //         tickUpper: tickUpper,
 //     //         liquidityDelta: -int256(amount).toInt128()
@@ -606,8 +953,8 @@ view blockTimestamp_(): date {
 //     //     );
 //     // }
 
-//     // emit Burn(msg.sender, tickLower, tickUpper, amount, amount0, amount1);
-//     slot0.unlocked = true;
+//     // emit Burn(caller, tickLower, tickUpper, amount, amount0, amount1);
+//     slot0.unlocked := true;
 // }
 
 // // record SwapCache {
@@ -682,7 +1029,7 @@ view blockTimestamp_(): date {
 //     //     'SPL'
 //     // );
 
-//     // slot0.unlocked = false;
+//     // slot0.unlocked := false;
 
 //     // SwapCache memory cache = SwapCache({
 //     //     liquidityStart: liquidity,
@@ -839,18 +1186,18 @@ view blockTimestamp_(): date {
 //     //     if (amount1 < 0) TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
 
 //     //     uint256 balance0Before = balance0();
-//     //     IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+//     //     IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
 //     //     require(balance0Before.add(uint256(amount0)) <= balance0(), 'IIA');
 //     // } else {
 //     //     if (amount0 < 0) TransferHelper.safeTransfer(token0, recipient, uint256(-amount0));
 
 //     //     uint256 balance1Before = balance1();
-//     //     IUniswapV3SwapCallback(msg.sender).uniswapV3SwapCallback(amount0, amount1, data);
+//     //     IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
 //     //     require(balance1Before.add(uint256(amount1)) <= balance1(), 'IIA');
 //     // }
 
-//     // emit Swap(msg.sender, recipient, amount0, amount1, state.sqrtPriceX96, state.liquidity, state.tick);
-//     // slot0.unlocked = true;
+//     // emit Swap(caller, recipient, amount0, amount1, state.sqrtPriceX96, state.liquidity, state.tick);
+//     // slot0.unlocked := true;
 // }
 
 // /// @inheritdoc IUniswapV3PoolActions
@@ -861,7 +1208,7 @@ view blockTimestamp_(): date {
 //     /* bytes calldata */ data: bytes
 // ) /* external override */ {
 //     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked = false;
+//     slot0.unlocked := false;
 //     require {flash: noDelegateCall();}
 //     // uint128 _liquidity = liquidity;
 //     // require(_liquidity > 0, 'L');
@@ -874,7 +1221,7 @@ view blockTimestamp_(): date {
 //     // if (amount0 > 0) TransferHelper.safeTransfer(token0, recipient, amount0);
 //     // if (amount1 > 0) TransferHelper.safeTransfer(token1, recipient, amount1);
 
-//     // IUniswapV3FlashCallback(msg.sender).uniswapV3FlashCallback(fee0, fee1, data);
+//     // IUniswapV3FlashCallback(caller).uniswapV3FlashCallback(fee0, fee1, data);
 
 //     // uint256 balance0After = balance0();
 //     // uint256 balance1After = balance1();
@@ -899,14 +1246,14 @@ view blockTimestamp_(): date {
 //     //     feeGrowthGlobal1X128 += FullMath.mulDiv(paid1 - fees1, FixedPoint128.Q128, _liquidity);
 //     // }
 
-//     // emit Flash(msg.sender, recipient, amount0, amount1, paid0, paid1);
-//     slot0.unlocked = true;
+//     // emit Flash(caller, recipient, amount0, amount1, paid0, paid1);
+//     slot0.unlocked := true;
 // }
 
 // /// @inheritdoc IUniswapV3PoolOwnerActions
 // entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override */ {
 //     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked = false;
+//     slot0.unlocked := false;
 //     require {setFeeProtocol: onlyFactoryOwner();}
 //     // require(
 //     //     (feeProtocol0 == 0 || (feeProtocol0 >= 4 && feeProtocol0 <= 10)) &&
@@ -915,7 +1262,7 @@ view blockTimestamp_(): date {
 //     // uint8 feeProtocolOld = slot0.feeProtocol;
 //     // slot0.feeProtocol = feeProtocol0 + (feeProtocol1 << 4);
 //     // emit SetFeeProtocol(feeProtocolOld % 16, feeProtocolOld >> 4, feeProtocol0, feeProtocol1);
-//     slot0.unlocked = true;
+//     slot0.unlocked := true;
 // }
 
 // /// @inheritdoc IUniswapV3PoolOwnerActions
@@ -925,7 +1272,7 @@ view blockTimestamp_(): date {
 //     /* uint128 */ amount1Requested: nat
 // ) /* external override returns (uint128 amount0, uint128 amount1) */ : {nat, nat} {
 //     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked = false;
+//     slot0.unlocked := false;
 //     require {collectProtocol: onlyFactoryOwner();}
 //     // amount0 = amount0Requested > protocolFees.token0 ? protocolFees.token0 : amount0Requested;
 //     // amount1 = amount1Requested > protocolFees.token1 ? protocolFees.token1 : amount1Requested;
@@ -941,6 +1288,6 @@ view blockTimestamp_(): date {
 //     //     TransferHelper.safeTransfer(token1, recipient, amount1);
 //     // }
 
-//     // emit CollectProtocol(msg.sender, recipient, amount0, amount1);
-//     slot0.unlocked = true;
+//     // emit CollectProtocol(caller, recipient, amount0, amount1);
+//     slot0.unlocked := true;
 // }
