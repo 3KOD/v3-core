@@ -26,6 +26,7 @@ constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
+constant Q128: nat = 1 <<| 128
 constant UnixStartTime: date = 1970-01-01
 constant original: address = self_address
 
@@ -814,7 +815,7 @@ entry mint(
         //     liquidityDelta: int,
         //     tick: int
         // ) /* private returns */ : PositionInfo /* storage position */ {
-        var position = positions[(recipient_mint, tickLower_mint, tickUpper_mint)]?.positionInfo;
+        var position = positions[(recipient_mint, tickLower_mint, tickUpper_mint)].positionInfo;
 
         var feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
         var feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
@@ -974,17 +975,50 @@ entry mint(
         const feeGrowthInside0X128 = retVal_getFeeGrowthInside[0];
         const feeGrowthInside1X128 = retVal_getFeeGrowthInside[1];
 
-    //     position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
+        // position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
 
-    //     // clear any tick data that is no longer needed
-    //     if (liquidityDelta < 0) {
-    //         if (flippedLower) {
-    //             ticks.clear(tickLower);
-    //         }
-    //         if (flippedUpper) {
-    //             ticks.clear(tickUpper);
-    //         }
-    //     }
+        /// @notice Credits accumulated fees to a user's position
+        /// @param self The individual position to update
+        /// @param liquidityDelta The change in pool liquidity as a result of the position update
+        /// @param feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
+        /// @param feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
+        // function update(
+        //     Info storage self,
+        //     int128 liquidityDelta,
+        //     uint256 feeGrowthInside0X128,
+        //     uint256 feeGrowthInside1X128
+        // ) internal {
+
+        var liquidityNext = 0;
+        if (amount_mint = 0) then begin
+            do_require(position.liquidity_PosInfo > 0, "NP"); // disallow pokes for 0 liquidity positions
+            liquidityNext := position.liquidity_PosInfo
+        end else begin
+            liquidityNext := position.liquidity_PosInfo + amount_mint
+        end;
+
+        // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
+        var tokensOwed0 = (feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
+        var tokensOwed1 = (feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
+
+        // update the position
+        if (amount_mint <> 0) then position.liquidity_PosInfo := liquidityNext;
+        position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
+        position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
+        if (tokensOwed0 > 0 or tokensOwed1 > 0) then begin
+            // overflow is acceptable, have to withdraw before you hit type(uint128).max fees
+            position.tokensOwed0_PosInfo += tokensOwed0;
+            position.tokensOwed1_PosInfo += tokensOwed1;
+        end;
+        // }
+
+        // clear any tick data that is no longer needed
+        // if (amount_mint < 0) then begin
+        //     if (flippedLower) then
+        //         ticks.clear(tickLower);
+        //     if (flippedUpper) then
+        //         ticks.clear(tickUpper)
+        // end
 
     }
 

@@ -5,7 +5,7 @@ import uniswapV3Pool from "./contracts/michelson/uniswapV3Pool.tz"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
-constant TickMathMAX_UINT128: nat = (1 <<| 128)
+constant Q128: nat = 1 <<| 128
 constant original: address = self_address
 
 event OwnerChanged {
@@ -60,7 +60,7 @@ function tickSpacingToMaxLiquidityPerTick(tickSpacing_: int): nat {
     var minTick = (TickMathMIN_TICK div tickSpacing_) * tickSpacing_;
     var maxTick = (TickMathMAX_TICK div tickSpacing_) * tickSpacing_;
     var numTicks: int = (maxTick - minTick) div tickSpacing_ + 1;
-    var retVal = int_to_nat((TickMathMAX_UINT128 - 1) div numTicks) ? the : 0;
+    var retVal = int_to_nat((Q128 - 1) div numTicks) ? the : 0;
     return retVal
 }
 
