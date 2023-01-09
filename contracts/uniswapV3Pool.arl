@@ -942,6 +942,8 @@ entry mint(
     slot0.unlocked := false;
     do_require(amount_mint > 0, ());
 
+    // _modifyPosition start
+
     // (, int256 amount0Int, int256 amount1Int) = _modifyPosition(
     //     ModifyPositionParams({
     //         owner: recipient,
@@ -1284,6 +1286,8 @@ entry mint(
         end
     end;
 
+    // _modifyPosition end
+
     const amount0_nat ?= int_to_nat(amount0) : INVALID_NAT;
     const amount1_nat ?= int_to_nat(amount1) : INVALID_NAT;
 
@@ -1311,7 +1315,7 @@ entry mint(
 
     emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat});
     slot0.unlocked := true
-}
+}   
 
 // /// @inheritdoc IUniswapV3PoolActions
 // getter collect(
@@ -1353,6 +1357,9 @@ entry burn(
 {
     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
     slot0.unlocked := false;
+
+    // _modifyPosition start
+    
     // (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
     //     ModifyPositionParams({
     //         owner: caller,
@@ -1361,21 +1368,356 @@ entry burn(
     //         liquidityDelta: -int256(amount).toInt128()
     //     })
     // );
+    
+    // getter _modifyPosition(params: ModifyPositionParams)
+    // // private
+    // : {
+    //     PositionInfo, /* Position.Info storage position */,
+    //     nat, /* int256 amount0 */,
+    //     nat, /* int256 amount1 */
+    // }
+    do_require(noDelegateCall(), ());
+    do_require(checkTicks(tickLower_burn, tickUpper_burn), ());
+    const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
+    // position := _updatePosition(
+    //     caller,
+    //     tickLower_burn,
+    //     tickUpper_burn,
+    //     amount_burn,
+    //     slot0_.tick
+    // );
+    
 
-    // const amount0_nat = abs(amount0);
-    // const amount1_nat = abs(amount1);
+    /// @dev Gets and updates a position with the given liquidity delta
+    /// @param owner the owner of the position
+    /// @param tickLower the lower tick of the position's tick range
+    /// @param tickUpper the upper tick of the position's tick range
+    /// @param tick the current tick, passed to avoid sloads
+    // getter _updatePosition(
+    //     owner: address,
+    //     tickLower: int,
+    //     tickUpper: int,
+    //     liquidityDelta: int,
+    //     tick: int
+    // ) /* private returns */ : PositionInfo /* storage position */ {
+    var position = positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo;
+
+    var feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
+    var feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
+
+    // if we need to update the ticks, do it
+    var flippedLower: bool = false;
+    var flippedUpper: bool = false;
+    if (amount_burn <> 0) then begin
+        const time: nat = blockTimestamp_();
+        
+        const retVal : (int * nat) = observeSingle(
+            time,
+            0,
+            slot0.tick,
+            slot0.observationIndex,
+            liquidity,
+            slot0.observationCardinality
+        );
+        var tickCumulative = retVal[0];
+        var secondsPerLiquidityCumulativeX128 = retVal[1];
+
+        // flippedLower = ticks.update(
+        //     tickLower,
+        //     tick,
+        //     liquidityDelta,
+        //     _feeGrowthGlobal0X128,
+        //     _feeGrowthGlobal1X128,
+        //     secondsPerLiquidityCumulativeX128,
+        //     tickCumulative,
+        //     time,
+        //     false,
+        //     maxLiquidityPerTick
+        // );
+
+        // function update(
+        //     mapping(int24 => Tick.Info) storage self,
+        //     int24 tick,
+        //     int24 tickCurrent,
+        //     int128 liquidityDelta,
+        //     uint256 feeGrowthGlobal0X128,
+        //     uint256 feeGrowthGlobal1X128,
+        //     uint160 secondsPerLiquidityCumulativeX128,
+        //     int56 tickCumulative,
+        //     uint32 time,
+        //     bool upper,
+        //     uint128 maxLiquidity
+        // ) internal returns (bool flipped) {
+        var info_flippedLower = ticks[tickLower_burn].info; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
+
+        var liquidityGrossBefore = info_flippedLower.liquidityGross;
+        var liquidityGrossAfter = liquidityGrossBefore + amount_burn;
+
+        do_require(liquidityGrossAfter <= maxLiquidityPerTick, "LO");
+
+        flippedLower := (liquidityGrossAfter = 0) <> (liquidityGrossBefore = 0);
+
+        if (liquidityGrossBefore = 0) then begin
+            // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
+            if (tickLower_burn <= slot0_.tick) then begin
+                info_flippedLower.feeGrowthOutside0X128 := feeGrowthGlobal0X128_;
+                info_flippedLower.feeGrowthOutside1X128 := feeGrowthGlobal1X128_;
+                info_flippedLower.secondsPerLiquidityOutsideX128 := secondsPerLiquidityCumulativeX128;
+                info_flippedLower.tickCumulativeOutside := tickCumulative;
+                info_flippedLower.secondsOutside := time
+            end;
+            info_flippedLower.%initialized := true
+        end;
+
+        info_flippedLower.liquidityGross := liquidityGrossAfter;
+
+        // when the lower (upper) tick is crossed left to right (right to left), liquidity must be added (removed)
+        // info_flippedLower.liquidityNet := upper
+        //     ? info_flippedLower.liquidityNet - amount_burn
+        //     : info_flippedLower.liquidityNet + amount_burn;
+        info_flippedLower.liquidityNet := info_flippedLower.liquidityNet + amount_burn;
+
+        ticks[tickLower_burn].info := info_flippedLower; // TODO - done-info_flippedLower-storage
+        
+        // }
+
+        // flippedUpper = ticks.update(
+        //     tickUpper,
+        //     tick,
+        //     liquidityDelta,
+        //     _feeGrowthGlobal0X128,
+        //     _feeGrowthGlobal1X128,
+        //     secondsPerLiquidityCumulativeX128,
+        //     tickCumulative,
+        //     time,
+        //     true,
+        //     maxLiquidityPerTick
+        // );
+
+        var info_flippedUpper = ticks[tickUpper_burn].info; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
+
+        liquidityGrossBefore := info_flippedUpper.liquidityGross;
+        liquidityGrossAfter := liquidityGrossBefore + amount_burn;
+
+        do_require(liquidityGrossAfter <= maxLiquidityPerTick, "LO");
+
+        flippedUpper := (liquidityGrossAfter = 0) <> (liquidityGrossBefore = 0);
+
+        if (liquidityGrossBefore = 0) then begin
+            // by convention, we assume that all growth before a tick was initialized happened _below_ the tick
+            if (tickUpper_burn <= slot0_.tick) then begin
+                info_flippedUpper.feeGrowthOutside0X128 := feeGrowthGlobal0X128;
+                info_flippedUpper.feeGrowthOutside1X128 := feeGrowthGlobal1X128;
+                info_flippedUpper.secondsPerLiquidityOutsideX128 := secondsPerLiquidityCumulativeX128;
+                info_flippedUpper.tickCumulativeOutside := tickCumulative;
+                info_flippedUpper.secondsOutside := time;
+            end;
+            info_flippedUpper.%initialized := true;
+        end;
+
+        info_flippedUpper.liquidityGross := liquidityGrossAfter;
+
+        // when the lower (upper) tick is crossed left to right (right to left), liquidity must be added (removed)
+        info_flippedLower.liquidityNet := info_flippedLower.liquidityNet - amount_burn;
+
+        ticks[tickUpper_burn].info := info_flippedUpper; // TODO - done-info_flippedLower-storage
+
+        if (flippedLower) then begin
+            do_require(tickLower_burn % tickSpacing = 0, ()); // ensure that the tick is spaced
+            const retVal_: (int * nat) ?= (tickLower_burn div tickSpacing) /% 256 : INVALID_INT_NAT;
+            const wordPos = retVal_[0];
+            const bitPos = retVal_[1];
+            const mask = 1 <<| bitPos;
+            const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
+            if posVal = 1 then
+                tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_NAT
+            else
+                tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+        end;
+
+        if (flippedUpper) then begin
+            do_require(tickUpper_burn % tickSpacing = 0, ()); // ensure that the tick is spaced
+            const retVal_: (int * nat) ?= (tickUpper_burn div tickSpacing) /% 256 : INVALID_INT_NAT;
+            const wordPos = retVal_[0];
+            const bitPos = retVal_[1];
+            const mask = 1 <<| bitPos;
+            const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
+            if posVal = 1 then
+                tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_NAT
+            else
+                tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+        end;
+    end;
+
+    const retVal_getFeeGrowthInside: (nat * nat) = getFeeGrowthInside(
+        tickLower_burn,
+        tickUpper_burn,
+        slot0_.tick,
+        feeGrowthGlobal0X128_,
+        feeGrowthGlobal1X128_
+    );
+
+    const feeGrowthInside0X128 = retVal_getFeeGrowthInside[0];
+    const feeGrowthInside1X128 = retVal_getFeeGrowthInside[1];
+
+    // position.update(liquidityDelta, feeGrowthInside0X128, feeGrowthInside1X128);
+
+    /// @notice Credits accumulated fees to a user's position
+    /// @param self The individual position to update
+    /// @param liquidityDelta The change in pool liquidity as a result of the position update
+    /// @param feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
+    /// @param feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
+    // function update(
+    //     Info storage self,
+    //     int128 liquidityDelta,
+    //     uint256 feeGrowthInside0X128,
+    //     uint256 feeGrowthInside1X128
+    // ) internal {
+
+    var liquidityNext = 0;
+    if (amount_burn = 0) then begin
+        do_require(position.liquidity_PosInfo > 0, "NP"); // disallow pokes for 0 liquidity positions
+        liquidityNext := position.liquidity_PosInfo
+    end else begin
+        liquidityNext := position.liquidity_PosInfo + amount_burn
+    end;
+
+    // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
+    var tokensOwed0 = (feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
+    var tokensOwed1 = (feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
+
+    // update the position
+    if (amount_burn <> 0) then position.liquidity_PosInfo := liquidityNext;
+    position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
+    position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
+    if (tokensOwed0 > 0 or tokensOwed1 > 0) then begin
+        // overflow is acceptable, have to withdraw before you hit type(uint128).max fees
+        position.tokensOwed0_PosInfo += tokensOwed0;
+        position.tokensOwed1_PosInfo += tokensOwed1;
+    end;
+    // }
+
+    // clear any tick data that is no longer needed
+    // if (amount_burn < 0) then begin
+    //     if (flippedLower) then
+    //         ticks.clear(tickLower);
+    //     if (flippedUpper) then
+    //         ticks.clear(tickUpper)
+    // end
+
+    // return position, it will be update in last of entry
+    // positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo := position;
+    var amount0: int = 0;
+    var amount1: int = 0;
+
+    if (amount_burn <> 0) then begin
+        if (slot0_.tick < tickLower_burn) then begin
+            // current tick is below the passed range; liquidity can only become in range by crossing from left to
+            // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
+            amount0 := sqrtPriceMathGetAmount0Delta(
+                tickMathGetSqrtRatioAtTick(tickLower_burn),
+                tickMathGetSqrtRatioAtTick(tickUpper_burn),
+                amount_burn
+            );
+        end else begin 
+            if (slot0_.tick < tickUpper_burn) then begin
+                // current tick is inside the passed range
+                var liquidityBefore = liquidity; // SLOAD for gas optimization
+
+                // write an oracle entry
+                // (slot0.observationIndex, slot0.observationCardinality) = observations.write(
+                //     slot0_.observationIndex,
+                //     blockTimestamp_(),
+                //     slot0_.tick,
+                //     liquidityBefore,
+                //     slot0_.observationCardinality,
+                //     slot0_.observationCardinalityNext
+                // );
+
+                /// @notice Writes an oracle observation to the array
+                /// @dev Writable at most once per block. Index represents the most recently written element. cardinality and index must be tracked externally.
+                /// If the index is at the end of the allowable array length (according to cardinality), and the next cardinality
+                /// is greater than the current one, cardinality may be increased. This restriction is created to preserve ordering.
+                /// @param self The stored oracle array
+                /// @param index The index of the observation that was most recently written to the observations array
+                /// @param blockTimestamp The timestamp of the new observation
+                /// @param tick The active tick at the time of the new observation
+                /// @param liquidity The total in-range liquidity at the time of the new observation
+                /// @param cardinality The number of populated elements in the oracle array
+                /// @param cardinalityNext The new length of the oracle array, independent of population
+                /// @return indexUpdated The new index of the most recently written element in the oracle array
+                /// @return cardinalityUpdated The new cardinality of the oracle array
+                // function write(
+                //     Observation[65535] storage self,
+                //     uint16 index,
+                //     uint32 blockTimestamp,
+                //     int24 tick,
+                //     uint128 liquidity,
+                //     uint16 cardinality,
+                //     uint16 cardinalityNext
+                // ) internal returns (uint16 indexUpdated, uint16 cardinalityUpdated) {
+                const last = observations[slot0_.observationIndex].observation_value;
+
+                // early return if we've already written an observation this block
+                if (last.blockTimestamp_Obs = blockTimestamp_()) then begin
+                    slot0.observationIndex := slot0_.observationIndex;
+                    slot0.observationCardinality := slot0_.observationCardinality
+                end;
+
+                var indexUpdated = 0;
+                var cardinalityUpdated = 0;
+                // if the conditions are right, we can bump the cardinality
+                if (slot0_.observationCardinalityNext > slot0_.observationCardinality and slot0_.observationIndex = (slot0_.observationCardinality - 1)) then 
+                    cardinalityUpdated := slot0_.observationCardinalityNext
+                else
+                    cardinalityUpdated := slot0_.observationCardinality;
+
+                indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
+                observations[indexUpdated].observation_value := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore);
+                slot0.observationIndex := indexUpdated;
+                slot0.observationCardinality := cardinalityUpdated;
+                // }
+
+                amount0 := sqrtPriceMathGetAmount0Delta(
+                    slot0_.sqrtPriceX96,
+                    tickMathGetSqrtRatioAtTick(tickUpper_burn),
+                    amount_burn
+                );
+                amount1 := sqrtPriceMathGetAmount1Delta(
+                    tickMathGetSqrtRatioAtTick(tickLower_burn),
+                    slot0_.sqrtPriceX96,
+                    amount_burn
+                );
+
+                liquidity := liquidityBefore + amount_burn
+            end else begin
+                // current tick is above the passed range; liquidity can only become in range by crossing from right to
+                // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
+                amount1 := sqrtPriceMathGetAmount1Delta(
+                    tickMathGetSqrtRatioAtTick(tickLower_burn),
+                    tickMathGetSqrtRatioAtTick(tickUpper_burn),
+                    amount_burn
+                )
+            end
+        end
+    end;
+
+    // _modifyPosition end
+
+    const amount0_nat ?= int_to_nat(-amount0) : INVALID_NAT;
+    const amount1_nat ?= int_to_nat(-amount1) : INVALID_NAT;
 
     // amount0 = uint256(-amount0Int);
     // amount1 = uint256(-amount1Int);
 
-    // if (amount0 > 0 || amount1 > 0) {
-    //     (position.tokensOwed0, position.tokensOwed1) = (
-    //         position.tokensOwed0 + uint128(amount0),
-    //         position.tokensOwed1 + uint128(amount1)
-    //     );
-    // }
+    if (amount0_nat > 0 or amount1_nat > 0) then begin
+        position.tokensOwed0_PosInfo := position.tokensOwed0_PosInfo + amount0_nat;
+        position.tokensOwed1_PosInfo := position.tokensOwed1_PosInfo + amount1_nat
+    end;
+    // position is storage in solidity, so should be update again
+    positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo := position;
 
-    // emit <Burn>({caller; tickLower_burn; tickUpper_burn; amount_burn; amount0_nat; amount1_nat});
+    emit <Burn>({caller; tickLower_burn; tickUpper_burn; amount_burn; amount0_nat; amount1_nat});
     slot0.unlocked := true
 }
 
