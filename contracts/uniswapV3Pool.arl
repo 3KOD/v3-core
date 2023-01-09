@@ -22,6 +22,7 @@ archetype uniswapV3Pool(factory: address, token0: address, token1: address)
 
 constant INVALID_NAT             : string = "INVALID_NAT"
 constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
+constant INVALID_UNPACK          : string = "INVALID_UNPACK"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
@@ -33,6 +34,17 @@ constant Q256: nat = 1 <<| 256
 constant UnixStartTime: date = 1970-01-01
 constant original: address = self_address
 
+record PoolKey {
+    token0_poolKey: address;
+    token1_poolKey: address;
+    fee_poolKey: nat
+} as (((token0, token1), fee))
+
+record MintCallbackData {
+    poolKey: PoolKey;
+    payer: address; 
+}
+
 function noDelegateCall() : bool {
     do_fail_if(self_address <> original, ("DelegateCall", original));
     return true
@@ -41,6 +53,9 @@ function noDelegateCall() : bool {
 variable fee: nat = 0
 variable tickSpacing: int = 0
 variable maxLiquidityPerTick: nat = 0
+
+variable balance0: nat = 0
+variable balance1: nat = 0
 
 // using LowGasSafeMath for uint256;
 // using LowGasSafeMath for int256;
@@ -1273,13 +1288,27 @@ entry mint(
         const amount0_nat ?= int_to_nat(amount0) : INVALID_NAT;
         const amount1_nat ?= int_to_nat(amount1) : INVALID_NAT;
 
-        var balance0Before: nat = 0;
-        var balance1Before: nat = 0;
+        // var balance0Before: nat = 0;
+        // var balance1Before: nat = 0;
         // if (amount0_nat > 0) then balance0Before := balance0();
         // if (amount1_nat > 0) then balance1Before := balance1();
         // IUniswapV3MintCallback(caller).uniswapV3MintCallback(amount0_nat, amount1_nat, data_mint);
         // if (amount0_nat > 0) then do_require(balance0Before + amount0_nat <= balance0(), "M0");
         // if (amount1_nat > 0) then do_require(balance1Before + amount1_nat <= balance1(), "M1");
+
+        const unpack_val : MintCallbackData ?= unpack<MintCallbackData>(data_mint) : INVALID_UNPACK; // TODO + please check amount amd amount_min slippage check
+
+        do_require(unpack_val.poolKey.token0_poolKey = token0, ());
+        do_require(unpack_val.poolKey.token1_poolKey = token1, ());
+        do_require(unpack_val.poolKey.fee_poolKey = fee, ());
+        
+        balance0 += amount0_nat;
+        balance1 += amount1_nat;
+
+        transfer 0tz to token0 call %transfer<address * address * nat>((unpack_val.payer, self_address, amount0_nat));
+        transfer 0tz to token1 call %transfer<address * address * nat>((unpack_val.payer, self_address, amount1_nat));
+
+        // TODO + please check amount amd amount_min slippage check
 
         emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat});
         slot0.unlocked := true
