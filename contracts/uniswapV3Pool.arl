@@ -535,6 +535,15 @@ event Mint {
     amount1_mint_event: nat;
 }
 
+event Burn{
+    owner_burn_event: address;
+    tickLower_burn_event: int;
+    tickUpper_burn_event: int;
+    amount_burn_event: nat;
+    amount0_burn_event: nat;
+    amount1_burn_event: nat;
+}
+
 /// @notice comparator for 32-bit timestamps
 /// @dev safe for 0 or 1 overflows, a and b _must_ be chronologically before or equal to time
 /// @param time A timestamp truncated to 32 bits
@@ -1269,8 +1278,8 @@ entry mint(
         // if (amount0_nat > 0) then do_require(balance0Before + amount0_nat <= balance0(), "M0");
         // if (amount1_nat > 0) then do_require(balance1Before + amount1_nat <= balance1(), "M1");
 
-        slot0.unlocked := true;
-        emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat})
+        emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat});
+        slot0.unlocked := true
     }
 }
 
@@ -1303,37 +1312,42 @@ entry mint(
 //     slot0.unlocked := true;
 // }
 
-// /// @inheritdoc IUniswapV3PoolActions
-// /// @dev noDelegateCall is applied indirectly via _modifyPosition
-// getter burn(
-//     /* int24 */ tickLower: int,
-//     /* int24 */ tickUpper: int,
-//     /* uint128 */ amount: nat
-// ) /* external override returns */ : {nat, nat} /* (uint256 amount0, uint256 amount1) */ {
-//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked := false;
-//     // (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
-//     //     ModifyPositionParams({
-//     //         owner: caller,
-//     //         tickLower: tickLower,
-//     //         tickUpper: tickUpper,
-//     //         liquidityDelta: -int256(amount).toInt128()
-//     //     })
-//     // );
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev noDelegateCall is applied indirectly via _modifyPosition
+getter burn(
+    /* int24 */ tickLower_burn: int,
+    /* int24 */ tickUpper_burn: int,
+    /* uint128 */ amount_burn: nat
+) 
+// /* external override returns */ : {nat, nat} /* (uint256 amount0, uint256 amount1) */ 
+{
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked := false;
+    // (Position.Info storage position, int256 amount0Int, int256 amount1Int) = _modifyPosition(
+    //     ModifyPositionParams({
+    //         owner: caller,
+    //         tickLower: tickLower,
+    //         tickUpper: tickUpper,
+    //         liquidityDelta: -int256(amount).toInt128()
+    //     })
+    // );
 
-//     // amount0 = uint256(-amount0Int);
-//     // amount1 = uint256(-amount1Int);
+    // const amount0_nat = abs(amount0);
+    // const amount1_nat = abs(amount1);
 
-//     // if (amount0 > 0 || amount1 > 0) {
-//     //     (position.tokensOwed0, position.tokensOwed1) = (
-//     //         position.tokensOwed0 + uint128(amount0),
-//     //         position.tokensOwed1 + uint128(amount1)
-//     //     );
-//     // }
+    // amount0 = uint256(-amount0Int);
+    // amount1 = uint256(-amount1Int);
 
-//     // emit Burn(caller, tickLower, tickUpper, amount, amount0, amount1);
-//     slot0.unlocked := true;
-// }
+    // if (amount0 > 0 || amount1 > 0) {
+    //     (position.tokensOwed0, position.tokensOwed1) = (
+    //         position.tokensOwed0 + uint128(amount0),
+    //         position.tokensOwed1 + uint128(amount1)
+    //     );
+    // }
+
+    // emit <Burn>({caller; tickLower_burn; tickUpper_burn; amount_burn; amount0_nat; amount1_nat});
+    slot0.unlocked := true
+}
 
 // // record SwapCache {
 // //     // the protocol fee for the input token
