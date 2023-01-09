@@ -21,11 +21,11 @@ archetype uniswapV3Pool(factory: address, token0: address, token1: address)
 // import IUniswapV3FlashCallback from "./interfaces/callback/IUniswapV3FlashCallback.tz"
 
 constant INVALID_NAT             : string = "INVALID_NAT"
-constant INVALID_RECORD          : string = "INVALID_RECORD"
 constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
+constant MAX_HISTORY: nat = 65536
 constant RESOLUTION: nat = 96
 constant Q96: nat = 1 <<| 96
 constant Q128: nat = 1 <<| 128
@@ -162,7 +162,10 @@ record Observation {
 } as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
 /// @inheritdoc IUniswapV3PoolState
 // Oracle.Observation[65535] public override observations;
-variable observations: list<Observation> = []
+asset observations identified by observation_key to big_map {
+    observation_key: nat;
+    observation_value: Observation;
+}
 
 /// @dev Mutually exclusive reentrancy protection into the pool to/from a method. This method also prevents entrance
 /// to a function before the pool is initialized. The reentrancy guard is required throughout the contract because
@@ -594,13 +597,13 @@ function binarySearch(
     while true do 
         i ?:= int_to_nat((l + r) div 2) : INVALID_NAT;
 
-        beforeOrAt ?:= nth(observations, i % cardinality_binarySearch) : INVALID_RECORD;
+        beforeOrAt := observations[i % cardinality_binarySearch].observation_value;
 
         // we've landed on an uninitialized tick, keep searching higher (more recently)
         if (beforeOrAt.initialized_Obs = false) then
             l := i + 1
         else begin
-            atOrAfter ?:= nth(observations, (i + 1) % cardinality_binarySearch) : INVALID_RECORD;
+            atOrAfter := observations[(i + 1) % cardinality_binarySearch].observation_value;
 
             var targetAtOrAfter = lte(time_binarySearch, beforeOrAt.blockTimestamp_Obs, target_binarySearch);
 
@@ -644,7 +647,7 @@ function getSurroundingObservations(
     cardinality_getSurroundingObservations: nat
 ) : Observation * Observation {
     // optimistically set before to the newest observation
-    var beforeOrAt: Observation ?= nth(observations, index_getSurroundingObservations) : INVALID_RECORD;
+    var beforeOrAt: Observation = observations[index_getSurroundingObservations].observation_value;
     var atOrAfter: Observation = {0; 0; 0; false};
 
     // if the target is chronologically at or after the newest observation, we can early return
@@ -658,8 +661,8 @@ function getSurroundingObservations(
     end;
 
     // now, set before to the oldest observation
-    beforeOrAt ?:= nth(observations, (index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations) : INVALID_RECORD;
-    if (beforeOrAt.initialized_Obs = false) then beforeOrAt ?:= nth(observations, 0) : INVALID_RECORD;
+    beforeOrAt := observations[(index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations].observation_value;
+    if (beforeOrAt.initialized_Obs = false) then beforeOrAt := observations[0].observation_value;
 
     // ensure that the target is chronologically at or after the oldest observation
     do_require(lte(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations), "OLD");
@@ -677,7 +680,7 @@ function observeSingle(
     cardinality_observeSingle: nat
 ) : int * nat {
     if (secondsAgo_observeSingle = 0) then begin
-        var last: Observation ?= nth(observations, index_observeSingle) : INVALID_RECORD;
+        var last: Observation = observations[index_observeSingle].observation_value;
         if (last.blockTimestamp_Obs <> time_observeSingle) then 
             last := transform(last, time_observeSingle, tick_observeSingle, liquidity_observeSingle);
         const val1 = last.tickCumulative_Obs;
@@ -1221,7 +1224,7 @@ entry mint(
                     //     uint16 cardinality,
                     //     uint16 cardinalityNext
                     // ) internal returns (uint16 indexUpdated, uint16 cardinalityUpdated) {
-                    const last ?= nth(observations, slot0_.observationIndex) : INVALID_RECORD;
+                    const last = observations[slot0_.observationIndex].observation_value;
 
                     // early return if we've already written an observation this block
                     if (last.blockTimestamp_Obs = blockTimestamp_()) then begin
@@ -1238,7 +1241,7 @@ entry mint(
                         cardinalityUpdated := slot0_.observationCardinality;
 
                     indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
-                    // nth(observations, indexUpdated) := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore); // TODO +
+                    observations[indexUpdated].observation_value := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore);
                     slot0.observationIndex := indexUpdated;
                     slot0.observationCardinality := cardinalityUpdated;
                     // }
