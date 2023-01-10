@@ -34,6 +34,53 @@ constant Q256: nat = 1 <<| 256
 constant UnixStartTime: date = 1970-01-01
 constant original: address = self_address
 
+event Mint {
+    sender_mint_event: address;
+    owner_mint_event: address;
+    tickLower_mint_event: int;
+    tickUpper_mint_event: int;
+    amount_mint_event: nat;
+    amount0_mint_event: nat;
+    amount1_mint_event: nat;
+}
+
+event Burn {
+    owner_burn_event: address;
+    tickLower_burn_event: int;
+    tickUpper_burn_event: int;
+    amount_burn_event: nat;
+    amount0_burn_event: nat;
+    amount1_burn_event: nat;
+}
+
+event Collect {
+    owner_collect_event: address;
+    recipient_collect_event: address;
+    tickLower_collect_event: int;
+    tickUpper_collect_event: int;
+    amount0_collect_event: nat;
+    amount1_collect_event: nat;
+}
+
+event SetFeeProtocol {
+    feeProtocol0Old_setFeeProtocol_event: nat; 
+    feeProtocol1Old_setFeeProtocol_event: nat; 
+    feeProtocol0New_setFeeProtocol_event: nat; 
+    feeProtocol1New_setFeeProtocol_event: nat;
+}
+
+event CollectProtocol {
+    sender_collectProtocol_event: address; 
+    recipient_collectProtocol_event: address; 
+    amount0_collectProtocol_event: nat; 
+    amount1_collectProtocol_event: nat;
+}
+
+event Initialize {
+    sqrtPriceX96_initialize_event : nat; 
+    tick_initialize_event : int;
+}
+
 record PoolKey {
     token0_poolKey: address;
     token1_poolKey: address;
@@ -353,27 +400,27 @@ view blockTimestamp_(): nat {
 //     slot0.unlocked := true;
 // }
 
-// // /// @inheritdoc IUniswapV3PoolActions
-// // /// @dev not locked because it initializes unlocked
-// // entry initialize(sqrtPriceX96: nat) /* external override */ {
-// //     // require(slot0.sqrtPriceX96 == 0, 'AI');
+/// @inheritdoc IUniswapV3PoolActions
+/// @dev not locked because it initializes unlocked
+entry initialize(sqrtPriceX96_initialize: nat) /* external override */ {
+    do_require(slot0.sqrtPriceX96 = 0, "AI");
 
-// //     // int24 tick = TickMath.getTickAtSqrtRatio(sqrtPriceX96);
+    const tick_param = tickMathGetTickAtSqrtRatio(sqrtPriceX96_initialize);
 
-// //     // (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(blockTimestamp_());
+    // (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(blockTimestamp_());
 
-// //     // slot0 = Slot0({
-// //     //     sqrtPriceX96: sqrtPriceX96,
-// //     //     tick: tick,
-// //     //     observationIndex: 0,
-// //     //     observationCardinality: cardinality,
-// //     //     observationCardinalityNext: cardinalityNext,
-// //     //     feeProtocol: 0,
-// //     //     unlocked: true
-// //     // });
+    // slot0 = Slot0({
+    //     sqrtPriceX96: sqrtPriceX96_initialize,
+    //     tick: tick,
+    //     observationIndex: 0,
+    //     observationCardinality: cardinality,
+    //     observationCardinalityNext: cardinalityNext,
+    //     feeProtocol: 0,
+    //     unlocked: true
+    // });
 
-// //     // emit Initialize(sqrtPriceX96, tick);
-// // }
+    emit<Initialize>({sqrtPriceX96_initialize; tick_param})
+}
 
 record ModifyPositionParams {
     // the address that owns the position
@@ -542,48 +589,6 @@ record ModifyPositionParams {
 //     //     }
 //     // }
 // }
-
-event Mint {
-    sender_mint_event: address;
-    owner_mint_event: address;
-    tickLower_mint_event: int;
-    tickUpper_mint_event: int;
-    amount_mint_event: nat;
-    amount0_mint_event: nat;
-    amount1_mint_event: nat;
-}
-
-event Burn {
-    owner_burn_event: address;
-    tickLower_burn_event: int;
-    tickUpper_burn_event: int;
-    amount_burn_event: nat;
-    amount0_burn_event: nat;
-    amount1_burn_event: nat;
-}
-
-event Collect {
-    owner_collect_event: address;
-    recipient_collect_event: address;
-    tickLower_collect_event: int;
-    tickUpper_collect_event: int;
-    amount0_collect_event: nat;
-    amount1_collect_event: nat;
-}
-
-event SetFeeProtocol {
-    feeProtocol0Old_setFeeProtocol_event: nat; 
-    feeProtocol1Old_setFeeProtocol_event: nat; 
-    feeProtocol0New_setFeeProtocol_event: nat; 
-    feeProtocol1New_setFeeProtocol_event: nat;
-}
-
-event CollectProtocol {
-    sender_collectProtocol_event: address; 
-    recipient_collectProtocol_event: address; 
-    amount0_collectProtocol_event: nat; 
-    amount1_collectProtocol_event: nat;
-}
 
 /// @notice comparator for 32-bit timestamps
 /// @dev safe for 0 or 1 overflows, a and b _must_ be chronologically before or equal to time
