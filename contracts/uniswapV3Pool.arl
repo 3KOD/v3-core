@@ -562,6 +562,15 @@ event Burn{
     amount1_burn_event: nat;
 }
 
+event Collect{
+    owner_collect_event: address;
+    recipient_collect_event: address;
+    tickLower_collect_event: int;
+    tickUpper_collect_event: int;
+    amount0_collect_event: nat;
+    amount1_collect_event: nat;
+}
+
 /// @notice comparator for 32-bit timestamps
 /// @dev safe for 0 or 1 overflows, a and b _must_ be chronologically before or equal to time
 /// @param time A timestamp truncated to 32 bits
@@ -1317,34 +1326,40 @@ entry mint(
     slot0.unlocked := true
 }   
 
-// /// @inheritdoc IUniswapV3PoolActions
-// getter collect(
-//     /* address */ recipient: address,
-//     /* int24 */ tickLower: int,
-//     /* int24 */ tickUpper: int,
-//     /* uint128 */ amount0Requested: nat,
-//     /* uint128 */ amount1Requested: nat
-// ) /* external override returns */ : {nat, nat} /* (uint128 amount0, uint128 amount1) */ {
-//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked := false;
-//     // // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
-//     // Position.Info storage position = positions.get(caller, tickLower, tickUpper);
+/// @inheritdoc IUniswapV3PoolActions
+entry collect(
+    /* address */ recipient_collect: address,
+    /* int24 */ tickLower_collect: int,
+    /* int24 */ tickUpper_collect: int,
+    /* uint128 */ amount0Requested_collect: nat,
+    /* uint128 */ amount1Requested_collect: nat
+)
+//  /* external override returns */ : nat * nat /* (uint128 amount0, uint128 amount1) */ 
+{
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked := false;
+    // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
+    // position is storage in solidity, so should be update again, it is updated on the last of this entry
+    var position = positions[(caller, tickLower_collect, tickUpper_collect)].positionInfo;
 
-//     // amount0 = amount0Requested > position.tokensOwed0 ? position.tokensOwed0 : amount0Requested;
-//     // amount1 = amount1Requested > position.tokensOwed1 ? position.tokensOwed1 : amount1Requested;
+    const amount0 = amount0Requested_collect > position.tokensOwed0_PosInfo ? position.tokensOwed0_PosInfo : amount0Requested_collect;
+    const amount1 = amount1Requested_collect > position.tokensOwed1_PosInfo ? position.tokensOwed1_PosInfo : amount1Requested_collect;
 
-//     // if (amount0 > 0) {
-//     //     position.tokensOwed0 -= amount0;
-//     //     TransferHelper.safeTransfer(token0, recipient, amount0);
-//     // }
-//     // if (amount1 > 0) {
-//     //     position.tokensOwed1 -= amount1;
-//     //     TransferHelper.safeTransfer(token1, recipient, amount1);
-//     // }
+    if (amount0 > 0) then begin
+        position.tokensOwed0_PosInfo -= amount0;
+        transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient_collect, amount0))
+    end;
+    if (amount1 > 0) then begin
+        position.tokensOwed1_PosInfo -= amount1;
+        transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient_collect, amount1))
+    end;
 
-//     // emit Collect(caller, recipient, tickLower, tickUpper, amount0, amount1);
-//     slot0.unlocked := true;
-// }
+    // position is storage in solidity, so should be update again
+    positions[(caller, tickLower_collect, tickUpper_collect)].positionInfo := position;
+
+    emit<Collect>({caller; recipient_collect; tickLower_collect; tickUpper_collect; amount0; amount1});
+    slot0.unlocked := true
+}
 
 /// @inheritdoc IUniswapV3PoolActions
 /// @dev noDelegateCall is applied indirectly via _modifyPosition
