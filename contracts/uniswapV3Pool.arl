@@ -26,8 +26,13 @@ constant INVALID_UNPACK          : string = "INVALID_UNPACK"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
+/// @dev The minimum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MIN_TICK)
+constant MIN_SQRT_RATIO: nat = 4295128739
+/// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
+constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
 constant MAX_HISTORY: nat = 65536
 constant RESOLUTION: nat = 96
+constant Q64: nat = 1 <<| 64
 constant Q96: nat = 1 <<| 96
 constant Q128: nat = 1 <<| 128
 constant Q256: nat = 1 <<| 256
@@ -400,6 +405,189 @@ view blockTimestamp_(): nat {
 //     slot0.unlocked := true;
 // }
 
+/// @notice Calculates sqrt(1.0001^tick) * 2^96
+/// @dev Throws if |tick| > max tick
+/// @param tick The input tick for the above formula
+/// @return sqrtPriceX96 A Fixed point Q64.96 number representing the sqrt of the ratio of the two assets (token1/token0)
+/// at the given tick
+function tickMathGetSqrtRatioAtTick(tick_tickMathGetSqrtRatioAtTick: int) : nat {
+    var absTick = abs(tick_tickMathGetSqrtRatioAtTick);
+    do_require(absTick <= TickMathMAX_TICK, "T");
+
+    var ratio = absTick % 2 <> 0 ? 340265354078544963557816517032075149313 : 340282366920938463463374607431768211456;
+    if ((absTick div (1 <<| 1)) % 2 <> 0) then ratio := (ratio * 340248342086729790484326174814286782778) |>> 128;
+    if ((absTick div (1 <<| 2)) % 2 <> 0) then ratio := (ratio * 340214320654664324051920982716015181260) |>> 128;
+    if ((absTick div (1 <<| 3)) % 2 <> 0) then ratio := (ratio * 340146287995602323631171512101879684304) |>> 128;
+    if ((absTick div (1 <<| 4)) % 2 <> 0) then ratio := (ratio * 340010263488231146823593991679159461444) |>> 128;
+    if ((absTick div (1 <<| 5)) % 2 <> 0) then ratio := (ratio * 339738377640345403697157401104375502016) |>> 128;
+    if ((absTick div (1 <<| 6)) % 2 <> 0) then ratio := (ratio * 339195258003219555707034227454543997025) |>> 128;
+    if ((absTick div (1 <<| 7)) % 2 <> 0) then ratio := (ratio * 338111622100601834656805679988414885971) |>> 128;
+    if ((absTick div (1 <<| 8)) % 2 <> 0) then ratio := (ratio * 335954724994790223023589805789778977700) |>> 128;
+    if ((absTick div (1 <<| 9)) % 2 <> 0) then ratio := (ratio * 331682121138379247127172139078559817300) |>> 128;
+    if ((absTick div (1 <<| 10)) % 2 <> 0) then ratio := (ratio * 323299236684853023288211250268160618739) |>> 128;
+    if ((absTick div (1 <<| 11)) % 2 <> 0) then ratio := (ratio * 307163716377032989948697243942600083929) |>> 128;
+    if ((absTick div (1 <<| 12)) % 2 <> 0) then ratio := (ratio * 277268403626896220162999269216087595045) |>> 128;
+    if ((absTick div (1 <<| 13)) % 2 <> 0) then ratio := (ratio * 225923453940442621947126027127485391333) |>> 128;
+    if ((absTick div (1 <<| 14)) % 2 <> 0) then ratio := (ratio * 149997214084966997727330242082538205943) |>> 128;
+    if ((absTick div (1 <<| 15)) % 2 <> 0) then ratio := (ratio * 66119101136024775622716233608466517926) |>> 128;
+    if ((absTick div (1 <<| 16)) % 2 <> 0) then ratio := (ratio * 12847376061809297530290974190478138313) |>> 128;
+    if ((absTick div (1 <<| 17)) % 2 <> 0) then ratio := (ratio * 485053260817066172746253684029974020) |>> 128;
+    if ((absTick div (1 <<| 18)) % 2 <> 0) then ratio := (ratio * 691415978906521570653435304214168) |>> 128;
+    if ((absTick div (1 <<| 19)) % 2 <> 0) then ratio := (ratio * 1404880482679654955896180642) |>> 128;
+
+    if (tick_tickMathGetSqrtRatioAtTick > 0) then ratio := abs(Q256 - 1) div ratio;
+
+    // this divides by 1<<32 rounding up to go from a Q128.128 to a Q128.96.
+    // we then downcast because we know the result always fits within 160 bits due to our tick input constraint
+    // we round up in the division so getTickAtSqrtRatio of the output price is always consistent
+    const sqrtPriceX96_val = (ratio |>> 32) + ((ratio % (1 <<| 32) = 0) ? 0 : 1);
+
+    return sqrtPriceX96_val
+}
+
+/// @notice Calculates the greatest tick value such that getRatioAtTick(tick) <= ratio
+/// @dev Throws in case sqrtPriceX96 < MIN_SQRT_RATIO, as MIN_SQRT_RATIO is the lowest value getRatioAtTick may
+/// ever return.
+/// @param sqrtPriceX96 The sqrt ratio for which to compute the tick as a Q64.96
+/// @return tick The greatest tick for which the ratio is less than or equal to the input ratio
+function tickMathGetTickAtSqrtRatio(sqrtPriceX96_getTickAtSqrtRatio: nat) : int {
+    // second inequality must be < because the price can never reach the price at the max tick
+    do_require(sqrtPriceX96_getTickAtSqrtRatio >= MIN_SQRT_RATIO and sqrtPriceX96_getTickAtSqrtRatio < MAX_SQRT_RATIO, "R");
+    var ratio: nat = sqrtPriceX96_getTickAtSqrtRatio <<| 32;
+
+    var r: nat = ratio;
+    var msb: nat = 0;
+
+    var gt_val: nat = 0;
+    var f: nat = 0;
+
+    gt_val := ((r + 1) > Q128) ? 1 : 0;
+    f := gt_val <<| 7;
+    msb := msb or f;
+    r := r |>> f;
+
+    gt_val := ((r + 1) > Q64) ? 1 : 0;
+    f := gt_val <<| 6;
+    msb := msb or f;
+    r := r |>> f;
+
+    gt_val := ((r + 1) > (1 <<| 32)) ? 1 : 0;
+    f := gt_val <<| 5;
+    msb := msb or f;
+    r := r |>> f;
+    
+    gt_val := ((r + 1) > (1 <<| 16)) ? 1 : 0;
+    f := gt_val <<| 4;
+    msb := msb or f;
+    r := r |>> f;
+
+    gt_val := ((r + 1) > (1 <<| 8)) ? 1 : 0;
+    f := gt_val <<| 3;
+    msb := msb or f;
+    r := r |>> f;
+    
+    gt_val := ((r + 1) > (1 <<| 4)) ? 1 : 0;
+    f := gt_val <<| 2;
+    msb := msb or f;
+    r := r |>> f;
+    
+    gt_val := ((r + 1) > (1 <<| 2)) ? 1 : 0;
+    f := gt_val <<| 1;
+    msb := msb or f;
+    r := r |>> f;
+
+    f := (r > 1) ? 1 : 0;
+    msb := msb or f;
+    
+    if (msb >= 128) then begin
+        const msb_nat ?= int_to_nat(msb - 127) : INVALID_NAT;
+        r := ratio |>> msb_nat
+    end else begin
+        const msb_nat ?= int_to_nat(127 - msb) : INVALID_NAT;
+        r := ratio <<| msb_nat
+    end;
+
+    var log_2: int = (msb - 128) * Q64;
+    
+    // TODO +
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := abs(log_2) or (f <<| 63);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 62);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 61);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 60);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 59);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 58);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 57);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 56);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 55);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 54);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 53);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 52);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 51);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    // log_2 := log_2 or (f <<| 50);
+
+    const log_sqrt10001: int = log_2 * 255738958999603826347141; // 128.128 number
+
+    const tickLow: int = (log_sqrt10001 - 3402992956809132418596140100660247210) div Q128;
+    const tickHi: int = (log_sqrt10001 + 291339464771989622907027621153398088495) div Q128;
+
+    const tick_val: int = (tickLow = tickHi) ? tickLow : ((tickMathGetSqrtRatioAtTick(tickHi) <= sqrtPriceX96_getTickAtSqrtRatio) ? tickHi : tickLow);
+    return tick_val
+}
+
 /// @inheritdoc IUniswapV3PoolActions
 /// @dev not locked because it initializes unlocked
 entry initialize(sqrtPriceX96_initialize: nat) /* external override */ {
@@ -407,17 +595,21 @@ entry initialize(sqrtPriceX96_initialize: nat) /* external override */ {
 
     const tick_param = tickMathGetTickAtSqrtRatio(sqrtPriceX96_initialize);
 
-    // (uint16 cardinality, uint16 cardinalityNext) = observations.initialize(blockTimestamp_());
+    // const ret_Val = observationsInitialize(blockTimestamp_());
+    /// @notice Initialize the oracle array by writing the first slot. Called once for the lifecycle of the observations array
+    /// @param self The stored oracle array
+    /// @param time The time of the oracle initialization, via block.timestamp truncated to uint32
+    /// @return cardinality The number of populated elements in the oracle array
+    /// @return cardinalityNext The new length of the oracle array, independent of population
+    // function observationsInitialize(time: nat) : nat * nat
+    // {
+    observations[0].observation_value := {blockTimestamp_(); 0; 0; true};
+    // return ((1, 1))
+    // }
+    const cardinality = 1;
+    const cardinalityNext = 1;
 
-    // slot0 = Slot0({
-    //     sqrtPriceX96: sqrtPriceX96_initialize,
-    //     tick: tick,
-    //     observationIndex: 0,
-    //     observationCardinality: cardinality,
-    //     observationCardinalityNext: cardinalityNext,
-    //     feeProtocol: 0,
-    //     unlocked: true
-    // });
+    slot0 := { sqrtPriceX96_initialize; tick_param; 0; cardinality; cardinalityNext; 0; true};
 
     emit<Initialize>({sqrtPriceX96_initialize; tick_param})
 }
@@ -815,46 +1007,6 @@ function getFeeGrowthInside(
     const feeGrowthInside0X128 ?= int_to_nat(feeGrowthGlobal0X128_getFeeGrowthInside - feeGrowthBelow0X128 - feeGrowthAbove0X128) : INVALID_NAT;
     const feeGrowthInside1X128 ?= int_to_nat(feeGrowthGlobal1X128_getFeeGrowthInside - feeGrowthBelow1X128 - feeGrowthAbove1X128) : INVALID_NAT;
     return ((feeGrowthInside0X128, feeGrowthInside1X128))
-}
-
-/// @notice Calculates sqrt(1.0001^tick) * 2^96
-/// @dev Throws if |tick| > max tick
-/// @param tick The input tick for the above formula
-/// @return sqrtPriceX96 A Fixed point Q64.96 number representing the sqrt of the ratio of the two assets (token1/token0)
-/// at the given tick
-function tickMathGetSqrtRatioAtTick(tick_tickMathGetSqrtRatioAtTick: int) : nat {
-    var absTick = abs(tick_tickMathGetSqrtRatioAtTick);
-    do_require(absTick <= TickMathMAX_TICK, "T");
-
-    var ratio = absTick % 2 <> 0 ? 340265354078544963557816517032075149313 : 340282366920938463463374607431768211456;
-    if ((absTick div (1 <<| 1)) % 2 <> 0) then ratio := (ratio * 340248342086729790484326174814286782778) |>> 128;
-    if ((absTick div (1 <<| 2)) % 2 <> 0) then ratio := (ratio * 340214320654664324051920982716015181260) |>> 128;
-    if ((absTick div (1 <<| 3)) % 2 <> 0) then ratio := (ratio * 340146287995602323631171512101879684304) |>> 128;
-    if ((absTick div (1 <<| 4)) % 2 <> 0) then ratio := (ratio * 340010263488231146823593991679159461444) |>> 128;
-    if ((absTick div (1 <<| 5)) % 2 <> 0) then ratio := (ratio * 339738377640345403697157401104375502016) |>> 128;
-    if ((absTick div (1 <<| 6)) % 2 <> 0) then ratio := (ratio * 339195258003219555707034227454543997025) |>> 128;
-    if ((absTick div (1 <<| 7)) % 2 <> 0) then ratio := (ratio * 338111622100601834656805679988414885971) |>> 128;
-    if ((absTick div (1 <<| 8)) % 2 <> 0) then ratio := (ratio * 335954724994790223023589805789778977700) |>> 128;
-    if ((absTick div (1 <<| 9)) % 2 <> 0) then ratio := (ratio * 331682121138379247127172139078559817300) |>> 128;
-    if ((absTick div (1 <<| 10)) % 2 <> 0) then ratio := (ratio * 323299236684853023288211250268160618739) |>> 128;
-    if ((absTick div (1 <<| 11)) % 2 <> 0) then ratio := (ratio * 307163716377032989948697243942600083929) |>> 128;
-    if ((absTick div (1 <<| 12)) % 2 <> 0) then ratio := (ratio * 277268403626896220162999269216087595045) |>> 128;
-    if ((absTick div (1 <<| 13)) % 2 <> 0) then ratio := (ratio * 225923453940442621947126027127485391333) |>> 128;
-    if ((absTick div (1 <<| 14)) % 2 <> 0) then ratio := (ratio * 149997214084966997727330242082538205943) |>> 128;
-    if ((absTick div (1 <<| 15)) % 2 <> 0) then ratio := (ratio * 66119101136024775622716233608466517926) |>> 128;
-    if ((absTick div (1 <<| 16)) % 2 <> 0) then ratio := (ratio * 12847376061809297530290974190478138313) |>> 128;
-    if ((absTick div (1 <<| 17)) % 2 <> 0) then ratio := (ratio * 485053260817066172746253684029974020) |>> 128;
-    if ((absTick div (1 <<| 18)) % 2 <> 0) then ratio := (ratio * 691415978906521570653435304214168) |>> 128;
-    if ((absTick div (1 <<| 19)) % 2 <> 0) then ratio := (ratio * 1404880482679654955896180642) |>> 128;
-
-    if (tick_tickMathGetSqrtRatioAtTick > 0) then ratio := abs(Q256 - 1) div ratio;
-
-    // this divides by 1<<32 rounding up to go from a Q128.128 to a Q128.96.
-    // we then downcast because we know the result always fits within 160 bits due to our tick input constraint
-    // we round up in the division so getTickAtSqrtRatio of the output price is always consistent
-    const sqrtPriceX96_val = (ratio |>> 32) + ((ratio % (1 <<| 32) = 0) ? 0 : 1);
-
-    return sqrtPriceX96_val
 }
 
 /// @notice Gets the amount0 delta between two prices
