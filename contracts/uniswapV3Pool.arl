@@ -553,7 +553,7 @@ event Mint {
     amount1_mint_event: nat;
 }
 
-event Burn{
+event Burn {
     owner_burn_event: address;
     tickLower_burn_event: int;
     tickUpper_burn_event: int;
@@ -562,13 +562,27 @@ event Burn{
     amount1_burn_event: nat;
 }
 
-event Collect{
+event Collect {
     owner_collect_event: address;
     recipient_collect_event: address;
     tickLower_collect_event: int;
     tickUpper_collect_event: int;
     amount0_collect_event: nat;
     amount1_collect_event: nat;
+}
+
+event SetFeeProtocol {
+    feeProtocol0Old_setFeeProtocol_event: nat; 
+    feeProtocol1Old_setFeeProtocol_event: nat; 
+    feeProtocol0New_setFeeProtocol_event: nat; 
+    feeProtocol1New_setFeeProtocol_event: nat;
+}
+
+event CollectProtocol {
+    sender_collectProtocol_event: address; 
+    recipient_collectProtocol_event: address; 
+    amount0_collectProtocol_event: nat; 
+    amount1_collectProtocol_event: nat;
 }
 
 /// @notice comparator for 32-bit timestamps
@@ -1347,10 +1361,12 @@ entry collect(
 
     if (amount0 > 0) then begin
         position.tokensOwed0_PosInfo -= amount0;
+        balance0 -= amount0;
         transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient_collect, amount0))
     end;
     if (amount1 > 0) then begin
         position.tokensOwed1_PosInfo -= amount1;
+        balance1 -= amount1;
         transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient_collect, amount1))
     end;
 
@@ -1732,7 +1748,7 @@ entry burn(
     // position is storage in solidity, so should be update again
     positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo := position;
 
-    emit <Burn>({caller; tickLower_burn; tickUpper_burn; amount_burn; amount0_nat; amount1_nat});
+    emit<Burn>({caller; tickLower_burn; tickUpper_burn; amount_burn; amount0_nat; amount1_nat});
     slot0.unlocked := true
 }
 
@@ -2029,44 +2045,47 @@ entry burn(
 //     slot0.unlocked := true;
 // }
 
-// /// @inheritdoc IUniswapV3PoolOwnerActions
-// entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override */ {
-//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked := false;
-//     require {setFeeProtocol: onlyFactoryOwner();}
-//     // require(
-//     //     (feeProtocol0 == 0 || (feeProtocol0 >= 4 && feeProtocol0 <= 10)) &&
-//     //         (feeProtocol1 == 0 || (feeProtocol1 >= 4 && feeProtocol1 <= 10))
-//     // );
-//     // uint8 feeProtocolOld = slot0.feeProtocol;
-//     // slot0.feeProtocol = feeProtocol0 + (feeProtocol1 << 4);
-//     // emit SetFeeProtocol(feeProtocolOld % 16, feeProtocolOld >> 4, feeProtocol0, feeProtocol1);
-//     slot0.unlocked := true;
-// }
+/// @inheritdoc IUniswapV3PoolOwnerActions
+entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override */ {
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked := false;
+    do_require(onlyFactoryOwner(), ());
+    do_require((feeProtocol0 = 0 or (feeProtocol0 >= 4 and feeProtocol0 <= 10)) and (feeProtocol1 = 0 or (feeProtocol1 >= 4 and feeProtocol1 <= 10)), ());
+    const feeProtocolOld = slot0.feeProtocol;
+    slot0.feeProtocol := feeProtocol0 + (feeProtocol1 <<| 4);
+    emit<SetFeeProtocol>({(feeProtocolOld % 16); (feeProtocolOld |>> 4); feeProtocol0; feeProtocol1});
+    slot0.unlocked := true
+}
 
-// /// @inheritdoc IUniswapV3PoolOwnerActions
-// getter collectProtocol(
-//     /* address */ recipient: address,
-//     /* uint128 */ amount0Requested: nat,
-//     /* uint128 */ amount1Requested: nat
-// ) /* external override returns (uint128 amount0, uint128 amount1) */ : {nat, nat} {
-//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked := false;
-//     require {collectProtocol: onlyFactoryOwner();}
-//     // amount0 = amount0Requested > protocolFees.token0 ? protocolFees.token0 : amount0Requested;
-//     // amount1 = amount1Requested > protocolFees.token1 ? protocolFees.token1 : amount1Requested;
+/// @inheritdoc IUniswapV3PoolOwnerActions
+entry collectProtocol(
+    /* address */ recipient: address,
+    /* uint128 */ amount0Requested: nat,
+    /* uint128 */ amount1Requested: nat
+) 
+// /* external override returns (uint128 amount0, uint128 amount1) */ : (nat * nat) 
+{
+    do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+    slot0.unlocked := false;
+    do_require(onlyFactoryOwner(), ());
+    var amount0 = amount0Requested > protocolFees.token0_fees ? protocolFees.token0_fees : amount0Requested;
+    var amount1 = amount1Requested > protocolFees.token1_fees ? protocolFees.token1_fees : amount1Requested;
 
-//     // if (amount0 > 0) {
-//     //     if (amount0 == protocolFees.token0) amount0--; // ensure that the slot is not cleared, for gas savings
-//     //     protocolFees.token0 -= amount0;
-//     //     TransferHelper.safeTransfer(token0, recipient, amount0);
-//     // }
-//     // if (amount1 > 0) {
-//     //     if (amount1 == protocolFees.token1) amount1--; // ensure that the slot is not cleared, for gas savings
-//     //     protocolFees.token1 -= amount1;
-//     //     TransferHelper.safeTransfer(token1, recipient, amount1);
-//     // }
+    if (amount0 > 0) then begin
+        if (amount0 = protocolFees.token0_fees) then
+            amount0 -= 1; // ensure that the slot is not cleared, for gas savings
+        protocolFees.token0_fees -= amount0;
+        balance0 -= amount0;
+        transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, amount0));
+    end;
+    if (amount1 > 0) then begin
+        if (amount1 = protocolFees.token1_fees) then 
+            amount1 -= 1; // ensure that the slot is not cleared, for gas savings
+        protocolFees.token1_fees -= amount1;
+        balance1 -= amount1;
+        transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, amount1));
+    end;
 
-//     // emit CollectProtocol(caller, recipient, amount0, amount1);
-//     slot0.unlocked := true;
-// }
+    emit<CollectProtocol>({caller; recipient; amount0; amount1});
+    slot0.unlocked := true
+}
