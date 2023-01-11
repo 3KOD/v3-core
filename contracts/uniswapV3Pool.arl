@@ -97,6 +97,20 @@ event Swap {
     tick_swap_event: int;
 }
 
+event Flash {
+    sender_flash_event: address;
+    recipient_flash_event: address;
+    amount0_flash_event: nat;
+    amount1_flash_event: nat;
+    paid0_flash_event: nat;
+    paid1_flash_event: nat;
+}
+
+event IncreaseObservationCardinalityNext{
+    observationCardinalityNextOld_event: nat;
+    observationCardinalityNextNew_event: nat;
+}
+
 record PoolKey {
     token0_poolKey: address;
     token1_poolKey: address;
@@ -402,24 +416,57 @@ view blockTimestamp_(): nat {
 //     //     );
 // }
 
-// /// @inheritdoc IUniswapV3PoolActions
-// entry increaseObservationCardinalityNext(observationCardinalityNext: nat)
-//     // external
-//     // override
-// {
-//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked := false;
-//     require {increaseObservationCardinalityNext: noDelegateCall();}
-//     // uint16 observationCardinalityNextOld = slot0.observationCardinalityNext; // for the event
-//     // uint16 observationCardinalityNextNew = observations.grow(
-//     //     observationCardinalityNextOld,
-//     //     observationCardinalityNext
-//     // );
-//     // slot0.observationCardinalityNext = observationCardinalityNextNew;
-//     // if (observationCardinalityNextOld <> observationCardinalityNextNew)
-//     //     emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
-//     slot0.unlocked := true;
-// }
+/// @inheritdoc IUniswapV3PoolActions
+entry increaseObservationCardinalityNext(observationCardinalityNext_param: nat)
+    // external
+    // override
+{
+    require {
+        increaseObservationCardinalityNext_c1: noDelegateCall();
+    }
+
+    effect {
+        do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+        slot0.unlocked := false;
+        const observationCardinalityNextOld: nat /* uint16 */ = slot0.observationCardinalityNext; // for the event
+        var observationCardinalityNextNew: nat =0; /* uint16 */
+        // = observationsGrow(
+        //     observationCardinalityNextOld,
+        //     observationCardinalityNext_param
+        // );
+        /// @notice Prepares the oracle array to store up to `next` observations
+        /// @param self The stored oracle array
+        /// @param current The current next cardinality of the oracle array
+        /// @param next The proposed next cardinality which will be populated in the oracle array
+        /// @return next The next cardinality which will be populated in the oracle array
+        // function grow(
+        //     Observation[65535] storage self,
+        //     uint16 observationCardinalityNextOld,
+        //     uint16 observationCardinalityNext_param
+        // ) internal returns (uint16) {
+        do_require(observationCardinalityNextOld > 0, "I");
+        // no-op if the passed next value isn't greater than the current next value
+        if (observationCardinalityNext_param <= observationCardinalityNextOld) then
+            observationCardinalityNextNew := observationCardinalityNextOld
+        else begin
+            // store in each slot to prevent fresh SSTOREs in swaps
+            // this data will not be used because the initialized boolean is still false
+            // for (uint16 i = observationCardinalityNextOld; i < observationCardinalityNext_param; i++) observations[i].blockTimestamp_Obs := 1;
+            var i = observationCardinalityNextOld;
+            while (i < observationCardinalityNext_param) do
+                observations[i].observation_value.blockTimestamp_Obs := 1;
+                i += 1
+            done;
+            observationCardinalityNextNew := observationCardinalityNext_param;
+            // }
+        end;
+
+        slot0.observationCardinalityNext := observationCardinalityNextNew;
+        if (observationCardinalityNextOld <> observationCardinalityNextNew) then
+            emit<IncreaseObservationCardinalityNext>({observationCardinalityNextOld; observationCardinalityNextNew});
+        slot0.unlocked := true
+    }
+}
 
 /// @notice Calculates sqrt(1.0001^tick) * 2^96
 /// @dev Throws if |tick| > max tick
@@ -2625,15 +2672,15 @@ entry swap(
         if zeroForOne then begin
             if (amount1 < 0) then begin
                 // TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
-                transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, abs(amount1)));
-                balance1 -= abs(amount1)
+                balance1 -= abs(amount1);
+                transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, abs(amount1)))
             end;
 
             // uint256 balance0Before = balance0();
             var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_UNPACK;
             const amount0_nat ?= int_to_nat(amount0) : INVALID_NAT;
-            transfer 0tz to token0 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount0_nat));
             balance0 += amount0;
+            transfer 0tz to token0 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount0_nat));
             // should be remove token transfer part
             // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
             transfer 0tz to caller call uniswapV3SwapCallback<int * int * bytes>((amount0, amount1, data))
@@ -2642,15 +2689,15 @@ entry swap(
         end else begin
             if (amount0 < 0) then begin
                 // TransferHelper.safeTransfer(token0, recipient, uint256(-amount0));
-                transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)));
                 balance0 -= abs(amount0);
+                transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)));
             end;
 
             // uint256 balance1Before = balance1();
             var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_UNPACK;
             const amount1_nat ?= int_to_nat(amount1) : INVALID_NAT;
-            transfer 0tz to token1 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount1_nat));
             balance0 += amount1;
+            transfer 0tz to token1 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount1_nat));
             // should be remove token transfer part
             // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
             transfer 0tz to caller call uniswapV3SwapCallback<int * int * bytes>((amount0, amount1, data))
@@ -2663,54 +2710,64 @@ entry swap(
     }
 }
 
-// /// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IUniswapV3PoolActions
 // entry flash(
 //     /* address */ recipient: address,
 //     /* uint256 */ amount0: nat,
 //     /* uint256 */ amount1: nat,
 //     /* bytes calldata */ data: bytes
 // ) /* external override */ {
-//     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
-//     slot0.unlocked := false;
-//     require {flash: noDelegateCall();}
-//     // uint128 _liquidity = liquidity;
-//     // require(_liquidity > 0, 'L');
+//     require {flash_c1: noDelegateCall();}
 
-//     // uint256 fee0 = FullMath.mulDivRoundingUp(amount0, fee, 1e6);
-//     // uint256 fee1 = FullMath.mulDivRoundingUp(amount1, fee, 1e6);
-//     // uint256 balance0Before = balance0();
-//     // uint256 balance1Before = balance1();
+//     effect {
+//         do_require(slot0.unlocked, ("LOK", slot0.unlocked));
+//         slot0.unlocked := false;
+        
+//         var liquidity_: nat = liquidity;
+//         do_require(liquidity_ > 0, "L");
 
-//     // if (amount0 > 0) TransferHelper.safeTransfer(token0, recipient, amount0);
-//     // if (amount1 > 0) TransferHelper.safeTransfer(token1, recipient, amount1);
+//         const fee0_param: nat /* uint256 */  = abs(ceil(amount0 * fee / 1_000_000));
+//         const fee1_param: nat /* uint256 */  = abs(ceil(amount1 * fee / 1_000_000));
+//         // const balance0Before_param: nat /* uint256 */  = balance0;
+//         // const balance1Before_param: nat /* uint256 */  = balance1;
 
-//     // IUniswapV3FlashCallback(caller).uniswapV3FlashCallback(fee0, fee1, data);
+//         if (amount0 > 0) then begin
+//             // TransferHelper.safeTransfer(token0, recipient, amount0);
+//             transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, amount0))
+//         end;
+//         if (amount1 > 0) then begin
+//             // TransferHelper.safeTransfer(token1, recipient, amount1);
+//             transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, amount1));
+//         end;
 
-//     // uint256 balance0After = balance0();
-//     // uint256 balance1After = balance1();
+//         // IUniswapV3FlashCallback(caller).uniswapV3FlashCallback(fee0, fee1, data);
 
-//     // require(balance0Before.add(fee0) <= balance0After, 'F0');
-//     // require(balance1Before.add(fee1) <= balance1After, 'F1');
+//         // uint256 balance0After = balance0();
+//         // uint256 balance1After = balance1();
 
-//     // // sub is safe because we know balanceAfter is gt balanceBefore by at least fee
-//     // uint256 paid0 = balance0After - balance0Before;
-//     // uint256 paid1 = balance1After - balance1Before;
+//         // require(balance0Before.add(fee0) <= balance0After, 'F0');
+//         // require(balance1Before.add(fee1) <= balance1After, 'F1');
 
-//     // if (paid0 > 0) {
-//     //     uint8 feeProtocol0 = slot0.feeProtocol % 16;
-//     //     uint256 fees0 = feeProtocol0 = 0 ? 0 : paid0 / feeProtocol0;
-//     //     if (uint128(fees0) > 0) protocolFees.token0 += uint128(fees0);
-//     //     feeGrowthGlobal0X128 += FullMath.mulDiv(paid0 - fees0, FixedPoint128.Q128, _liquidity);
-//     // }
-//     // if (paid1 > 0) {
-//     //     uint8 feeProtocol1 = slot0.feeProtocol >> 4;
-//     //     uint256 fees1 = feeProtocol1 = 0 ? 0 : paid1 / feeProtocol1;
-//     //     if (uint128(fees1) > 0) protocolFees.token1 += uint128(fees1);
-//     //     feeGrowthGlobal1X128 += FullMath.mulDiv(paid1 - fees1, FixedPoint128.Q128, _liquidity);
-//     // }
+//         // // sub is safe because we know balanceAfter is gt balanceBefore by at least fee
+//         // uint256 paid0 = balance0After - balance0Before;
+//         // uint256 paid1 = balance1After - balance1Before;
 
-//     // emit Flash(caller, recipient, amount0, amount1, paid0, paid1);
-//     slot0.unlocked := true;
+//         // if (paid0 > 0) {
+//         //     uint8 feeProtocol0 = slot0.feeProtocol % 16;
+//         //     uint256 fees0 = feeProtocol0 = 0 ? 0 : paid0 / feeProtocol0;
+//         //     if (uint128(fees0) > 0) protocolFees.token0 += uint128(fees0);
+//         //     feeGrowthGlobal0X128 += FullMath.mulDiv(paid0 - fees0, FixedPoint128.Q128, liquidity_);
+//         // }
+//         // if (paid1 > 0) {
+//         //     uint8 feeProtocol1 = slot0.feeProtocol >> 4;
+//         //     uint256 fees1 = feeProtocol1 = 0 ? 0 : paid1 / feeProtocol1;
+//         //     if (uint128(fees1) > 0) protocolFees.token1 += uint128(fees1);
+//         //     feeGrowthGlobal1X128 += FullMath.mulDiv(paid1 - fees1, FixedPoint128.Q128, liquidity_);
+//         // }
+
+//         // emit<Flash>({caller; recipient; amount0; amount1; paid0; paid1});
+//         slot0.unlocked := true
+//     }
 // }
 
 /// @inheritdoc IUniswapV3PoolOwnerActions
