@@ -607,77 +607,75 @@ function tickMathGetTickAtSqrtRatio(sqrtPriceX96_getTickAtSqrtRatio: nat) : int 
     end;
 
     var log_2: int = (msb - 128) * Q64;
-    // var log_2_nat: nat ?= int_to_nat()
     
-    // TODO +
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := abs(log_2) or (f <<| 63);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 63);
     r := r |>> f;
 
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 62);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 62);
     r := r |>> f;
 
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 61);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 61);
     r := r |>> f;
 
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 60);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 60);
     r := r |>> f;
 
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 59);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 59);
     r := r |>> f;
 
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 58);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 58);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 57);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 57);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 56);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 56);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 55);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 55);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 54);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 54);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 53);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 53);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 52);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 52);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 51);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 51);
     r := r |>> f;
     
     r := (r * r) |>> 127;
     f := r |>> 128;
-    // log_2 := log_2 or (f <<| 50);
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 50);
 
     const log_sqrt10001: int = log_2 * 255738958999603826347141; // 128.128 number
 
