@@ -24,8 +24,8 @@ constant INVALID_NAT             : string = "INVALID_NAT"
 constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
 constant INVALID_UNPACK          : string = "INVALID_UNPACK"
 
-constant TickMathMIN_TICK: int = -887272
-constant TickMathMAX_TICK: int = -TickMathMIN_TICK
+constant MIN_TICK: int = -887272
+constant MAX_TICK: int = -MIN_TICK
 /// @dev The minimum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MIN_TICK)
 constant MIN_SQRT_RATIO: nat = 4295128739
 /// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
@@ -35,6 +35,7 @@ constant RESOLUTION: nat = 96
 constant Q64: nat = 1 <<| 64
 constant Q96: nat = 1 <<| 96
 constant Q128: nat = 1 <<| 128
+constant Q160: nat = 1 <<| 160
 constant Q256: nat = 1 <<| 256
 constant UnixStartTime: date = 1970-01-01
 constant original: address = self_address
@@ -86,6 +87,16 @@ event Initialize {
     tick_initialize_event : int;
 }
 
+event Swap {
+    sender_swap_event: address;
+    recipient_swap_event: address;
+    amount0_swap_event: int;
+    amount1_swap_event: int;
+    sqrtPriceX96_swap_event: nat;
+    liquidity_swap_event: nat;
+    tick_swap_event: int;
+}
+
 record PoolKey {
     token0_poolKey: address;
     token1_poolKey: address;
@@ -95,6 +106,11 @@ record PoolKey {
 record MintCallbackData {
     poolKey: PoolKey;
     payer: address; 
+}
+
+record SwapCallbackData {
+    path_SwapCallbackData: bytes;
+    payer_SwapCallbackData: address;
 }
 
 function noDelegateCall() : bool {
@@ -185,7 +201,7 @@ record TickInfo {
     // the seconds spent on the other side of the tick (relative to the current tick)
     // only has relative meaning, not absolute — the value depends on when the tick is initialized
     secondsOutside: nat;
-    // true iff the tick is initialized, i.e. the value is exactly equivalent to the expression liquidityGross != 0
+    // true iff the tick is initialized, i.e. the value is exactly equivalent to the expression liquidityGross <> 0
     // these 8 bits are set to prevent fresh sstores when crossing newly initialized ticks
     %initialized: bool;
 }
@@ -254,8 +270,8 @@ function onlyFactoryOwner(): bool {
 /// @dev Common checks for valid tick inputs.
 function checkTicks(tickLower: int, tickUpper: int): bool {
     do_require(tickLower < tickUpper, "TLU");
-    do_require(tickLower >= TickMathMIN_TICK, "TLM");
-    do_require(tickUpper <= TickMathMAX_TICK, "TUM");
+    do_require(tickLower >= MIN_TICK, "TLM");
+    do_require(tickUpper <= MAX_TICK, "TUM");
     return true
 }
 
@@ -273,7 +289,7 @@ view blockTimestamp_(): nat {
 //     // (bool success, bytes memory data) = token0.staticcall(
 //     //     abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this))
 //     // );
-//     // require(success && data.length >= 32);
+//     // require(success and data.length >= 32);
 //     // return abi.decode(data, (uint256));
 //     return 0
 // }
@@ -285,7 +301,7 @@ view blockTimestamp_(): nat {
 //     // (bool success, bytes memory data) = token1.staticcall(
 //     //     abi.encodeWithSelector(IERC20Minimal.balanceOf.selector, address(this))
 //     // );
-//     // require(success && data.length >= 32);
+//     // require(success and data.length >= 32);
 //     // return abi.decode(data, (uint256));
 //     return 0
 // }
@@ -400,7 +416,7 @@ view blockTimestamp_(): nat {
 //     //     observationCardinalityNext
 //     // );
 //     // slot0.observationCardinalityNext = observationCardinalityNextNew;
-//     // if (observationCardinalityNextOld != observationCardinalityNextNew)
+//     // if (observationCardinalityNextOld <> observationCardinalityNextNew)
 //     //     emit IncreaseObservationCardinalityNext(observationCardinalityNextOld, observationCardinalityNextNew);
 //     slot0.unlocked := true;
 // }
@@ -412,7 +428,7 @@ view blockTimestamp_(): nat {
 /// at the given tick
 function tickMathGetSqrtRatioAtTick(tick_tickMathGetSqrtRatioAtTick: int) : nat {
     var absTick = abs(tick_tickMathGetSqrtRatioAtTick);
-    do_require(absTick <= TickMathMAX_TICK, "T");
+    do_require(absTick <= MAX_TICK, "T");
 
     var ratio = absTick % 2 <> 0 ? 340265354078544963557816517032075149313 : 340282366920938463463374607431768211456;
     if ((absTick div (1 <<| 1)) % 2 <> 0) then ratio := (ratio * 340248342086729790484326174814286782778) |>> 128;
@@ -508,6 +524,7 @@ function tickMathGetTickAtSqrtRatio(sqrtPriceX96_getTickAtSqrtRatio: nat) : int 
     end;
 
     var log_2: int = (msb - 128) * Q64;
+    // var log_2_nat: nat ?= int_to_nat()
     
     // TODO +
     r := (r * r) |>> 127;
@@ -650,13 +667,13 @@ record ModifyPositionParams {
 //     //     _slot0.tick
 //     // );
 
-//     // if (params.liquidityDelta != 0) {
+//     // if (params.liquidityDelta <> 0) {
 //     //     if (_slot0.tick < params.tickLower) {
 //     //         // current tick is below the passed range; liquidity can only become in range by crossing from left to
 //     //         // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
 //     //         amount0 = SqrtPriceMath.getAmount0Delta(
-//     //             TickMath.getSqrtRatioAtTick(params.tickLower),
-//     //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+//     //             tickMathGetSqrtRatioAtTick(params.tickLower),
+//     //             tickMathGetSqrtRatioAtTick(params.tickUpper),
 //     //             params.liquidityDelta
 //     //         );
 //     //     } else if (_slot0.tick < params.tickUpper) {
@@ -675,11 +692,11 @@ record ModifyPositionParams {
 
 //     //         amount0 = SqrtPriceMath.getAmount0Delta(
 //     //             _slot0.sqrtPriceX96,
-//     //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+//     //             tickMathGetSqrtRatioAtTick(params.tickUpper),
 //     //             params.liquidityDelta
 //     //         );
 //     //         amount1 = SqrtPriceMath.getAmount1Delta(
-//     //             TickMath.getSqrtRatioAtTick(params.tickLower),
+//     //             tickMathGetSqrtRatioAtTick(params.tickLower),
 //     //             _slot0.sqrtPriceX96,
 //     //             params.liquidityDelta
 //     //         );
@@ -689,8 +706,8 @@ record ModifyPositionParams {
 //     //         // current tick is above the passed range; liquidity can only become in range by crossing from right to
 //     //         // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
 //     //         amount1 = SqrtPriceMath.getAmount1Delta(
-//     //             TickMath.getSqrtRatioAtTick(params.tickLower),
-//     //             TickMath.getSqrtRatioAtTick(params.tickUpper),
+//     //             tickMathGetSqrtRatioAtTick(params.tickLower),
+//     //             tickMathGetSqrtRatioAtTick(params.tickUpper),
 //     //             params.liquidityDelta
 //     //         );
 //     //     }
@@ -717,7 +734,7 @@ record ModifyPositionParams {
 //     // // if we need to update the ticks, do it
 //     // bool flippedLower;
 //     // bool flippedUpper;
-//     // if (liquidityDelta != 0) {
+//     // if (liquidityDelta <> 0) {
 //     //     uint32 time = blockTimestamp_();
 //     //     (int56 tickCumulative, uint160 secondsPerLiquidityCumulativeX128) = observations.observeSingle(
 //     //         time,
@@ -788,7 +805,7 @@ record ModifyPositionParams {
 /// @param a A comparison timestamp from which to determine the relative position of `time`
 /// @param b From which to determine the relative position of `time`
 /// @return bool Whether `a` is chronologically <= `b`
-function lte(
+function lte_tickBmpNITWOW(
     time: nat,
     a: nat,
     b: nat
@@ -840,10 +857,10 @@ function binarySearch(
         else begin
             atOrAfter := observations[(i + 1) % cardinality_binarySearch].observation_value;
 
-            var targetAtOrAfter = lte(time_binarySearch, beforeOrAt.blockTimestamp_Obs, target_binarySearch);
+            var targetAtOrAfter = lte_tickBmpNITWOW(time_binarySearch, beforeOrAt.blockTimestamp_Obs, target_binarySearch);
 
             // check if we've found the answer!
-            if (targetAtOrAfter and lte(time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) then
+            if (targetAtOrAfter and lte_tickBmpNITWOW(time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) then
                 return ((beforeOrAt, atOrAfter));
 
             if (targetAtOrAfter = false) then r := i - 1
@@ -886,7 +903,7 @@ function getSurroundingObservations(
     var atOrAfter: Observation = {0; 0; 0; false};
 
     // if the target is chronologically at or after the newest observation, we can early return
-    if (lte(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations)) then begin
+    if (lte_tickBmpNITWOW(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations)) then begin
         if (beforeOrAt.blockTimestamp_Obs = target_getSurroundingObservations) then
             // if newest observation equals target, we're in the same block, so we can ignore atOrAfter
             return ((beforeOrAt, atOrAfter))
@@ -900,13 +917,13 @@ function getSurroundingObservations(
     if (beforeOrAt.initialized_Obs = false) then beforeOrAt := observations[0].observation_value;
 
     // ensure that the target is chronologically at or after the oldest observation
-    do_require(lte(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations), "OLD");
+    do_require(lte_tickBmpNITWOW(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations), "OLD");
 
     // if we've reached this point, we have to binary search
     return binarySearch(time_getSurroundingObservations, target_getSurroundingObservations, index_getSurroundingObservations, cardinality_getSurroundingObservations)
 }
 
-function observeSingle(
+function observationsObserveSingle(
     time_observeSingle: nat,
     secondsAgo_observeSingle: nat,
     tick_observeSingle: int,
@@ -1175,7 +1192,7 @@ entry mint(
     if (amount_mint <> 0) then begin
         const time: nat = blockTimestamp_();
         
-        const retVal : (int * nat) = observeSingle(
+        const retVal : (int * nat) = observationsObserveSingle(
             time,
             0,
             slot0.tick,
@@ -1292,11 +1309,7 @@ entry mint(
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
             const mask = 1 <<| bitPos;
-            const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
-            if posVal = 1 then
-                tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_NAT
-            else
-                tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+            tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp xor mask
         end;
 
         if (flippedUpper) then begin
@@ -1305,11 +1318,7 @@ entry mint(
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
             const mask = 1 <<| bitPos;
-            const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
-            if posVal = 1 then
-                tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_NAT
-            else
-                tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+            tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp xor mask
         end;
     end;
 
@@ -1426,22 +1435,21 @@ entry mint(
                 if (last.blockTimestamp_Obs = blockTimestamp_()) then begin
                     slot0.observationIndex := slot0_.observationIndex;
                     slot0.observationCardinality := slot0_.observationCardinality
+                end else begin
+                    var indexUpdated = 0;
+                    var cardinalityUpdated = 0;
+                    // if the conditions are right, we can bump the cardinality
+                    if ((slot0_.observationCardinalityNext > slot0_.observationCardinality) and (slot0_.observationIndex = (slot0_.observationCardinality - 1))) then 
+                        cardinalityUpdated := slot0_.observationCardinalityNext
+                    else
+                        cardinalityUpdated := slot0_.observationCardinality;
+
+                    indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
+                    observations[indexUpdated].observation_value := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore);
+                    // } // end function write
+                    slot0.observationIndex := indexUpdated;
+                    slot0.observationCardinality := cardinalityUpdated;
                 end;
-
-                var indexUpdated = 0;
-                var cardinalityUpdated = 0;
-                // if the conditions are right, we can bump the cardinality
-                if (slot0_.observationCardinalityNext > slot0_.observationCardinality and slot0_.observationIndex = (slot0_.observationCardinality - 1)) then 
-                    cardinalityUpdated := slot0_.observationCardinalityNext
-                else
-                    cardinalityUpdated := slot0_.observationCardinality;
-
-                indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
-                observations[indexUpdated].observation_value := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore);
-                slot0.observationIndex := indexUpdated;
-                slot0.observationCardinality := cardinalityUpdated;
-                // }
-
                 amount0 := sqrtPriceMathGetAmount0Delta(
                     slot0_.sqrtPriceX96,
                     tickMathGetSqrtRatioAtTick(tickUpper_mint),
@@ -1599,7 +1607,7 @@ entry burn(
     if (amount_burn <> 0) then begin
         const time: nat = blockTimestamp_();
         
-        const retVal : (int * nat) = observeSingle(
+        const retVal : (int * nat) = observationsObserveSingle(
             time,
             0,
             slot0.tick,
@@ -1850,22 +1858,21 @@ entry burn(
                 if (last.blockTimestamp_Obs = blockTimestamp_()) then begin
                     slot0.observationIndex := slot0_.observationIndex;
                     slot0.observationCardinality := slot0_.observationCardinality
+                end else begin
+                    var indexUpdated = 0;
+                    var cardinalityUpdated = 0;
+                    // if the conditions are right, we can bump the cardinality
+                    if ((slot0_.observationCardinalityNext > slot0_.observationCardinality) and (slot0_.observationIndex = (slot0_.observationCardinality - 1))) then 
+                        cardinalityUpdated := slot0_.observationCardinalityNext
+                    else
+                        cardinalityUpdated := slot0_.observationCardinality;
+
+                    indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
+                    observations[indexUpdated].observation_value := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore);
+                    // } // end function write
+                    slot0.observationIndex := indexUpdated;
+                    slot0.observationCardinality := cardinalityUpdated;
                 end;
-
-                var indexUpdated = 0;
-                var cardinalityUpdated = 0;
-                // if the conditions are right, we can bump the cardinality
-                if (slot0_.observationCardinalityNext > slot0_.observationCardinality and slot0_.observationIndex = (slot0_.observationCardinality - 1)) then 
-                    cardinalityUpdated := slot0_.observationCardinalityNext
-                else
-                    cardinalityUpdated := slot0_.observationCardinality;
-
-                indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
-                observations[indexUpdated].observation_value := transform(last, blockTimestamp_(), slot0_.tick, liquidityBefore);
-                slot0.observationIndex := indexUpdated;
-                slot0.observationCardinality := cardinalityUpdated;
-                // }
-
                 amount0 := sqrtPriceMathGetAmount0Delta(
                     slot0_.sqrtPriceX96,
                     tickMathGetSqrtRatioAtTick(tickUpper_burn),
@@ -1909,248 +1916,752 @@ entry burn(
     slot0.unlocked := true
 }
 
-// // record SwapCache {
-// //     // the protocol fee for the input token
-// //     feeProtocol: nat;
-// //     // liquidity at the beginning of the swap
-// //     liquidityStart: nat;
-// //     // the timestamp of the current block
-// //     blockTimestamp: nat;
-// //     // the current value of the tick accumulator, computed only if we cross an initialized tick
-// //     tickCumulative: int;
-// //     // the current value of seconds per liquidity accumulator, computed only if we cross an initialized tick
-// //     secondsPerLiquidityCumulativeX128: nat;
-// //     // whether we've computed and cached the above two accumulators
-// //     computedLatestObservation: bool;
-// // }
+record SwapCache {
+    // the protocol fee for the input token
+    feeProtocol_swapCache: nat;
+    // liquidity at the beginning of the swap
+    liquidityStart_swapCache: nat;
+    // the timestamp of the current block
+    blockTimestamp_swapCache: nat;
+    // the current value of the tick accumulator, computed only if we cross an initialized tick
+    tickCumulative_swapCache: int;
+    // the current value of seconds per liquidity accumulator, computed only if we cross an initialized tick
+    secondsPerLiquidityCumulativeX128_swapCache: nat;
+    // whether we've computed and cached the above two accumulators
+    computedLatestObservation_swapCache: bool;
+} as ((feeProtocol, liquidityStart, blockTimestamp, tickCumulative, secondsPerLiquidityCumulativeX128, computedLatestObservation))
 
-// // // the top level state of the swap, the results of which are recorded in storage at the end
-// // record SwapState {
-// //     // the amount remaining to be swapped in/out of the input/output asset
-// //     amountSpecifiedRemaining: int;
-// //     // the amount already swapped out/in of the output/input asset
-// //     amountCalculated: int;
-// //     // current sqrt(price)
-// //     sqrtPriceX96: nat;
-// //     // the tick associated with the current price
-// //     tick: int;
-// //     // the global fee growth of the input token
-// //     feeGrowthGlobalX128: nat;
-// //     // amount of input token paid as protocol fee
-// //     protocolFee: nat;
-// //     // the current liquidity in range
-// //     liquidity: nat;
-// // }
+// the top level state of the swap, the results of which are recorded in storage at the end
+record SwapState {
+    // the amount remaining to be swapped in/out of the input/output asset
+    amountSpecifiedRemaining_swapState: int;
+    // the amount already swapped out/in of the output/input asset
+    amountCalculated_swapState: int;
+    // current sqrt(price)
+    sqrtPriceX96_swapState: nat;
+    // the tick associated with the current price
+    tick_swapState: int;
+    // the global fee growth of the input token
+    feeGrowthGlobalX128_swapState: nat;
+    // amount of input token paid as protocol fee
+    protocolFee_swapState: nat;
+    // the current liquidity in range
+    liquidity_swapState: nat;
+} as ((amountSpecifiedRemaining, amountCalculated, sqrtPriceX96, tick, feeGrowthGlobalX128, protocolFee, liquidity))
 
-// // record StepComputations {
-// //     // the price at the beginning of the step
-// //     sqrtPriceStartX96: nat;
-// //     // the next tick to swap to from the current tick in the swap direction
-// //     tickNext: int;
-// //     // whether tickNext is initialized or not
-// //     %initialized: bool;
-// //     // sqrt(price) for the next tick (1/0)
-// //     sqrtPriceNextX96: nat;
-// //     // how much is being swapped in in this step
-// //     amountIn: nat;
-// //     // how much is being swapped out
-// //     amountOut: nat;
-// //     // how much fee is being paid in
-// //     feeAmount: nat;
-// // }
+record StepComputations {
+    // the price at the beginning of the step
+    sqrtPriceStartX96_stepComputations: nat;
+    // the next tick to swap to from the current tick in the swap direction
+    tickNext_stepComputations: int;
+    // whether tickNext is initialized or not
+    initialized_stepComputations: bool;
+    // sqrt(price) for the next tick (1/0)
+    sqrtPriceNextX96_stepComputations: nat;
+    // how much is being swapped in in this step
+    amountIn_stepComputations: nat;
+    // how much is being swapped out
+    amountOut_stepComputations: nat;
+    // how much fee is being paid in
+    feeAmount_stepComputations: nat;
+} as ((sqrtPriceStartX96, tickNext, %initialized, sqrtPriceNextX96, amountIn, amountOut, feeAmount))
 
-// /// @inheritdoc IUniswapV3PoolActions
-// getter swap(
-//     /* address */ recipient: address,
-//     /* bool */ zeroForOne: bool,
-//     /* int256 */ amountSpecified: int,
-//     /* uint160 */ sqrtPriceLimitX96: nat,
-//     /* bytes calldata */ data: bytes
-// ) /* external override returns */ : {int, int} /* (int256 amount0, int256 amount1) */ {
-//     require {swap: noDelegateCall();}
+/// @notice Returns the index of the most significant bit of the number,
+///     where the least significant bit is at index 0 and the most significant bit is at index 255
+/// @dev The function satisfies the property:
+///     x >= 2**mostSignificantBit(x) and x < 2**(mostSignificantBit(x)+1)
+/// @param x the value for which to compute the most significant bit, must be greater than 0
+/// @return r the index of the most significant bit
+function bitMathMostSignificantBit(xx: nat) : nat {
+    do_require(xx > 0, ());
+    var x: nat = xx;
+    var r: nat = 0;
+
+    if (x >= (1 <<| 128)) then begin
+        x := x |>> 128;
+        r += 128
+    end;
+    if (x >= (1 <<| 64)) then begin
+        x := x |>> 64;
+        r += 64
+    end;
+    if (x >= (1 <<| 32)) then begin
+        x := x |>> 32;
+        r += 32
+    end;
+    if (x >= (1 <<| 16)) then begin
+        x := x |>> 16;
+        r += 16
+    end;
+    if (x >= (1 <<| 8)) then begin
+        x := x |>> 8;
+        r += 8
+    end;
+    if (x >= (1 <<| 4)) then begin
+        x := x |>> 4;
+        r += 4
+    end;
+    if (x >= (1 <<| 2)) then begin
+        x := x |>> 2;
+        r += 2
+    end;
+    if (x >= (1 <<| 1)) then r += 1;
+
+    return r
+}
+
+/// @notice Returns the index of the least significant bit of the number,
+///     where the least significant bit is at index 0 and the most significant bit is at index 255
+/// @dev The function satisfies the property:
+///     (x & 2**leastSignificantBit(x)) != 0 and (x & (2**(leastSignificantBit(x)) - 1)) == 0)
+/// @param x the value for which to compute the least significant bit, must be greater than 0
+/// @return r the index of the least significant bit
+function bitMathLeastSignificantBit(xx: nat) : nat {
+    do_require(xx > 0, ());
+    var x: nat = xx;
+    var r: nat = 255;
+
+    if ((x and 340282366920938463463374607431768211455) > 0) then
+        r -= 128
+    else
+        x := x |>> 128;
     
-//     // require(amountSpecified != 0, 'AS');
+    if ((x and 18446744073709551615) > 0) then
+        r -= 64
+    else
+        x := x |>> 64;
+    
+    if ((x and 4294967295) > 0) then
+        r -= 32
+    else
+        x := x |>> 32;
+    
+    if ((x and 65535) > 0) then
+        r -= 16
+    else
+        x := x |>> 16;
+    
+    if ((x and 255) > 0) then
+        r -= 8
+    else
+        x := x |>> 8;
+    
+    if ((x and 15) > 0) then
+        r -= 4
+    else
+        x := x |>> 4;
+    
+    if ((x and 3) > 0) then
+        r -= 2
+    else
+        x := x |>> 2;
+    
+    if ((x and 1) > 0) then r -= 1;
 
-//     // Slot0 memory slot0Start = slot0;
+    return r
+}
 
-//     // require(slot0Start.unlocked, 'LOK');
-//     // require(
-//     //     zeroForOne
-//     //         ? sqrtPriceLimitX96 < slot0Start.sqrtPriceX96 && sqrtPriceLimitX96 > TickMath.MIN_SQRT_RATIO
-//     //         : sqrtPriceLimitX96 > slot0Start.sqrtPriceX96 && sqrtPriceLimitX96 < TickMath.MAX_SQRT_RATIO,
-//     //     'SPL'
-//     // );
+/// @notice Returns the next initialized tick contained in the same word (or adjacent word) as the tick that is either
+/// to the left (less than or equal to) or right (greater than) of the given tick
+/// @param self The mapping in which to compute the next initialized tick
+/// @param tick The starting tick
+/// @param tickSpacing The spacing between usable ticks
+/// @param lte_tickBmpNITWOW Whether to search for the next initialized tick to the left (less than or equal to the starting tick)
+/// @return next The next initialized or uninitialized tick up to 256 ticks away from the current tick
+/// @return initialized Whether the next tick is initialized, as the function only searches within up to 256 ticks
+function tickBitmapNextInitializedTickWithinOneWord(
+    tick_tickBmpNITWOWord: int,
+    tickSpacing_tickBmpNITWOWord: int,
+    lte_tickBmpNITWOWord: bool
+) : int * bool {
+    var compressed: int = tick_tickBmpNITWOWord div tickSpacing_tickBmpNITWOWord;
+    if (tick_tickBmpNITWOWord < 0 and tick_tickBmpNITWOWord % tickSpacing_tickBmpNITWOWord <> 0) then compressed -= 1; // round towards negative infinity
 
-//     // slot0.unlocked := false;
+    var initialized_retVal: bool = false;
+    var next_retVal: int = 0;
+    if (lte_tickBmpNITWOWord) then begin
+        const retVal_: (int * nat) ?= (compressed) /% 256 : INVALID_INT_NAT;
+        const wordPos = retVal_[0];
+        const bitPos = retVal_[1];
+        // all the 1s at or to the right of the current bitPos
+        var mask: nat ?= int_to_nat((1 <<| bitPos) - 1 + (1 <<| bitPos)) : INVALID_INT_NAT;
+        var masked: nat = tickBitmap[wordPos].tickSpacing_tickBmp and mask;
 
-//     // SwapCache memory cache = SwapCache({
-//     //     liquidityStart: liquidity,
-//     //     blockTimestamp: blockTimestamp_(),
-//     //     feeProtocol: zeroForOne ? (slot0Start.feeProtocol % 16) : (slot0Start.feeProtocol >> 4),
-//     //     secondsPerLiquidityCumulativeX128: 0,
-//     //     tickCumulative: 0,
-//     //     computedLatestObservation: false
-//     // });
+        // if there are no initialized ticks to the right of or at the current tick, return rightmost in the word
+        initialized_retVal := masked <> 0;
+        // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
+        next_retVal := initialized_retVal
+            ? (compressed - (bitPos - bitMathMostSignificantBit(masked))) * tickSpacing_tickBmpNITWOWord
+            : (compressed - bitPos) * tickSpacing_tickBmpNITWOWord;
+    end else begin
+        // start from the word of the next tick, since the current tick state doesn't matter
+        const retVal_: (int * nat) ?= (compressed + 1) /% 256 : INVALID_INT_NAT;
+        const wordPos = retVal_[0];
+        const bitPos = retVal_[1];
+        // all the 1s at or to the left of the bitPos
+        var mask: nat ?= int_to_nat(Q256 - (1 <<| bitPos)) : INVALID_NAT;
+        var masked: nat = tickBitmap[wordPos].tickSpacing_tickBmp and mask;
 
-//     // bool exactInput = amountSpecified > 0;
+        // if there are no initialized ticks to the left of the current tick, return leftmost in the word
+        initialized_retVal := masked <> 0;
+        // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
+        next_retVal := initialized_retVal
+            ? (compressed + 1 + (bitMathLeastSignificantBit(masked) - bitPos)) * tickSpacing_tickBmpNITWOWord
+            : (compressed + 1 + (255 - bitPos)) * tickSpacing_tickBmpNITWOWord;
+    end;
 
-//     // SwapState memory state = SwapState({
-//     //     amountSpecifiedRemaining: amountSpecified,
-//     //     amountCalculated: 0,
-//     //     sqrtPriceX96: slot0Start.sqrtPriceX96,
-//     //     tick: slot0Start.tick,
-//     //     feeGrowthGlobalX128: zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128,
-//     //     protocolFee: 0,
-//     //     liquidity: cache.liquidityStart
-//     // });
+    return ((next_retVal, initialized_retVal))
+}
 
-//     // // continue swapping as long as we haven't used the entire input/output and haven't reached the price limit
-//     // while (state.amountSpecifiedRemaining != 0 && state.sqrtPriceX96 != sqrtPriceLimitX96) {
-//     //     StepComputations memory step;
+/// @notice Gets the next sqrt price given a delta of token0
+/// @dev Always rounds up, because in the exact output case (increasing price) we need to move the price at least
+/// far enough to get the desired output amount, and in the exact input case (decreasing price) we need to move the
+/// price less in order to not send too much output.
+/// The most precise formula for this is liquidity * sqrtPX96 / (liquidity +- amount * sqrtPX96),
+/// if this is impossible because of overflow, we calculate liquidity / (liquidity / sqrtPX96 +- amount).
+/// @param sqrtPX96 The starting price, i.e. before accounting for the token0 delta
+/// @param liquidity The amount of usable liquidity
+/// @param amount How much of token0 to add or remove from virtual reserves
+/// @param add Whether to add or remove the amount of token0
+/// @return The price after adding or removing amount, depending on add
+function sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(
+    /* uint160 */ sqrtPX96_sqrtPMGNSPFromA0RU: nat,
+    /* uint128 */ liquidity_sqrtPMGNSPFromA0RU: nat,
+    /* uint256 */ amount_sqrtPMGNSPFromA0RU: nat,
+    /* bool */ add_sqrtPMGNSPFromA0RU: bool
+) : nat {
+    // we short circuit amount == 0 because the result is otherwise not guaranteed to equal the input price
+    if (amount_sqrtPMGNSPFromA0RU = 0) then 
+        return sqrtPX96_sqrtPMGNSPFromA0RU;
+    var numerator1: nat = liquidity_sqrtPMGNSPFromA0RU <<| RESOLUTION;
 
-//     //     step.sqrtPriceStartX96 = state.sqrtPriceX96;
+    if (add_sqrtPMGNSPFromA0RU) then begin
+        var product: nat = 0;
+        product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
+        if ((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) then begin
+            const denominator: nat = numerator1 + product;
+            if (denominator >= numerator1) then
+                // always fits in 160 bits
+                return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
+        end;
 
-//     //     (step.tickNext, step.initialized) = tickBitmap.nextInitializedTickWithinOneWord(
-//     //         state.tick,
-//     //         tickSpacing,
-//     //         zeroForOne
-//     //     );
+        return abs(ceil(numerator1 / (numerator1 div sqrtPX96_sqrtPMGNSPFromA0RU) + amount_sqrtPMGNSPFromA0RU))
+    end else begin
+        var product: nat = 0;
+        product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
+        // if the product overflows, we know the denominator underflows
+        // in addition, we must check that the denominator does not underflow
+        do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), ());
+        const denominator: nat ?= int_to_nat(numerator1 - product) : INVALID_NAT;
+        return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
+    end
+}
 
-//     //     // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
-//     //     if (step.tickNext < TickMath.MIN_TICK) {
-//     //         step.tickNext = TickMath.MIN_TICK;
-//     //     } else if (step.tickNext > TickMath.MAX_TICK) {
-//     //         step.tickNext = TickMath.MAX_TICK;
-//     //     }
+/// @notice Gets the next sqrt price given a delta of token1
+/// @dev Always rounds down, because in the exact output case (decreasing price) we need to move the price at least
+/// far enough to get the desired output amount, and in the exact input case (increasing price) we need to move the
+/// price less in order to not send too much output.
+/// The formula we compute is within <1 wei of the lossless version: sqrtPX96 +- amount / liquidity
+/// @param sqrtPX96 The starting price, i.e., before accounting for the token1 delta
+/// @param liquidity The amount of usable liquidity
+/// @param amount How much of token1 to add, or remove, from virtual reserves
+/// @param add Whether to add, or remove, the amount of token1
+/// @return The price after adding or removing `amount`
+function sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(
+    /* uint160 */ sqrtPX96_sqrtPMGNSPFromA1RD: nat,
+    /* uint128 */ liquidity_sqrtPMGNSPFromA1RD: nat,
+    /* uint256 */ amount_sqrtPMGNSPFromA1RD: nat,
+    /* bool */ add_sqrtPMGNSPFromA1RD: bool
+) : nat {
+    // if we're adding (subtracting), rounding down requires rounding the quotient down (up)
+    // in both cases, avoid a mulDiv for most inputs
+    if (add_sqrtPMGNSPFromA1RD) then begin
+        const quotient: nat = (
+            (amount_sqrtPMGNSPFromA1RD < Q160)
+                ? (amount_sqrtPMGNSPFromA1RD <<| RESOLUTION) div liquidity_sqrtPMGNSPFromA1RD
+                : amount_sqrtPMGNSPFromA1RD * Q96 div liquidity_sqrtPMGNSPFromA1RD
+        );
 
-//     //     // get the price for the next tick
-//     //     step.sqrtPriceNextX96 = TickMath.getSqrtRatioAtTick(step.tickNext);
+        return (sqrtPX96_sqrtPMGNSPFromA1RD + quotient)
+    end else begin
+        const quotient: nat = (
+            (amount_sqrtPMGNSPFromA1RD < Q160)
+                ? abs(ceil((amount_sqrtPMGNSPFromA1RD <<| RESOLUTION) / liquidity_sqrtPMGNSPFromA1RD))
+                : abs(ceil(amount_sqrtPMGNSPFromA1RD * Q96 / liquidity_sqrtPMGNSPFromA1RD))
+        );
 
-//     //     // compute values to swap to the target tick, price limit, or point where input/output amount is exhausted
-//     //     (state.sqrtPriceX96, step.amountIn, step.amountOut, step.feeAmount) = SwapMath.computeSwapStep(
-//     //         state.sqrtPriceX96,
-//     //         (zeroForOne ? step.sqrtPriceNextX96 < sqrtPriceLimitX96 : step.sqrtPriceNextX96 > sqrtPriceLimitX96)
-//     //             ? sqrtPriceLimitX96
-//     //             : step.sqrtPriceNextX96,
-//     //         state.liquidity,
-//     //         state.amountSpecifiedRemaining,
-//     //         fee
-//     //     );
+        do_require(sqrtPX96_sqrtPMGNSPFromA1RD > quotient, ());
+        // always fits 160 bits
+        const retVal: nat ?= int_to_nat(sqrtPX96_sqrtPMGNSPFromA1RD - quotient): INVALID_NAT;
+        return retVal
+    end
+}
 
-//     //     if (exactInput) {
-//     //         state.amountSpecifiedRemaining -= (step.amountIn + step.feeAmount).toInt256();
-//     //         state.amountCalculated = state.amountCalculated.sub(step.amountOut.toInt256());
-//     //     } else {
-//     //         state.amountSpecifiedRemaining += step.amountOut.toInt256();
-//     //         state.amountCalculated = state.amountCalculated.add((step.amountIn + step.feeAmount).toInt256());
-//     //     }
+/// @notice Gets the next sqrt price given an input amount of token0 or token1
+/// @dev Throws if price or liquidity are 0, or if the next price is out of bounds
+/// @param sqrtPX96 The starting price, i.e., before accounting for the input amount
+/// @param liquidity The amount of usable liquidity
+/// @param amountIn How much of token0, or token1, is being swapped in
+/// @param zeroForOne Whether the amount in is token0 or token1
+/// @return sqrtQX96 The price after adding the input amount to token0 or token1
+function sqrtPriceMathGetNextSqrtPriceFromInput(
+    /* uint160 */ sqrtPX96_sqrlPriceMathGNSPFI: nat,
+    /* uint128 */ liquidity_sqrlPriceMathGNSPFI: nat,
+    /* uint256 */ amountIn_sqrlPriceMathGNSPFI: nat,
+    /* bool */ zeroForOne_sqrlPriceMathGNSPFI: bool
+) : nat
+//  (uint160 sqrtQX96) 
+{
+    do_require(sqrtPX96_sqrlPriceMathGNSPFI > 0, ());
+    do_require(liquidity_sqrlPriceMathGNSPFI > 0, ());
 
-//     //     // if the protocol fee is on, calculate how much is owed, decrement feeAmount, and increment protocolFee
-//     //     if (cache.feeProtocol > 0) {
-//     //         uint256 delta = step.feeAmount / cache.feeProtocol;
-//     //         step.feeAmount -= delta;
-//     //         state.protocolFee += uint128(delta);
-//     //     }
+    // round to make sure that we don't pass the target price
+    const retVal: nat = zeroForOne_sqrlPriceMathGNSPFI
+        ? sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(sqrtPX96_sqrlPriceMathGNSPFI, liquidity_sqrlPriceMathGNSPFI, amountIn_sqrlPriceMathGNSPFI, true)
+        : sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(sqrtPX96_sqrlPriceMathGNSPFI, liquidity_sqrlPriceMathGNSPFI, amountIn_sqrlPriceMathGNSPFI, true);
+    
+    return retVal
+}
 
-//     //     // update global fee tracker
-//     //     if (state.liquidity > 0)
-//     //         state.feeGrowthGlobalX128 += FullMath.mulDiv(step.feeAmount, FixedPoint128.Q128, state.liquidity);
+/// @notice Gets the next sqrt price given an output amount of token0 or token1
+/// @dev Throws if price or liquidity are 0 or the next price is out of bounds
+/// @param sqrtPX96 The starting price before accounting for the output amount
+/// @param liquidity The amount of usable liquidity
+/// @param amountOut How much of token0, or token1, is being swapped out
+/// @param zeroForOne Whether the amount out is token0 or token1
+/// @return sqrtQX96 The price after removing the output amount of token0 or token1
+function sqrtPriceMathGetNextSqrtPriceFromOutput(
+    /* uint160 */ sqrtPX96_sqrlPriceMathGNSPFO: nat,
+    /* uint128 */ liquidity_sqrlPriceMathGNSPFO: nat,
+    /* uint256 */ amountOut_sqrlPriceMathGNSPFO: nat,
+    /* bool */ zeroForOne_sqrlPriceMathGNSPFO: bool
+) : nat
+//  (uint160 sqrtQX96) 
+{
+    do_require(sqrtPX96_sqrlPriceMathGNSPFO > 0, ());
+    do_require(liquidity_sqrlPriceMathGNSPFO > 0, ());
 
-//     //     // shift tick if we reached the next price
-//     //     if (state.sqrtPriceX96 == step.sqrtPriceNextX96) {
-//     //         // if the tick is initialized, run the tick transition
-//     //         if (step.initialized) {
-//     //             // check for the placeholder value, which we replace with the actual value the first time the swap
-//     //             // crosses an initialized tick
-//     //             if (!cache.computedLatestObservation) {
-//     //                 (cache.tickCumulative, cache.secondsPerLiquidityCumulativeX128) = observations.observeSingle(
-//     //                     cache.blockTimestamp,
-//     //                     0,
-//     //                     slot0Start.tick,
-//     //                     slot0Start.observationIndex,
-//     //                     cache.liquidityStart,
-//     //                     slot0Start.observationCardinality
-//     //                 );
-//     //                 cache.computedLatestObservation = true;
-//     //             }
-//     //             int128 liquidityNet = ticks.cross(
-//     //                 step.tickNext,
-//     //                 (zeroForOne ? state.feeGrowthGlobalX128 : feeGrowthGlobal0X128),
-//     //                 (zeroForOne ? feeGrowthGlobal1X128 : state.feeGrowthGlobalX128),
-//     //                 cache.secondsPerLiquidityCumulativeX128,
-//     //                 cache.tickCumulative,
-//     //                 cache.blockTimestamp
-//     //             );
-//     //             // if we're moving leftward, we interpret liquidityNet as the opposite sign
-//     //             // safe because liquidityNet cannot be type(int128).min
-//     //             if (zeroForOne) liquidityNet = -liquidityNet;
+    // round to make sure that we pass the target price
+    const retVal: nat = zeroForOne_sqrlPriceMathGNSPFO
+        ? sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(sqrtPX96_sqrlPriceMathGNSPFO, liquidity_sqrlPriceMathGNSPFO, amountOut_sqrlPriceMathGNSPFO, false)
+        : sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(sqrtPX96_sqrlPriceMathGNSPFO, liquidity_sqrlPriceMathGNSPFO, amountOut_sqrlPriceMathGNSPFO, false);
+    
+    return retVal
+}
 
-//     //             state.liquidity = LiquidityMath.addDelta(state.liquidity, liquidityNet);
-//     //         }
+/// @notice Computes the result of swapping some amount in, or amount out, given the parameters of the swap
+/// @dev The fee, plus the amount in, will never exceed the amount remaining if the swap's `amountSpecified` is positive
+/// @param sqrtRatioCurrentX96 The current sqrt price of the pool
+/// @param sqrtRatioTargetX96 The price that cannot be exceeded, from which the direction of the swap is inferred
+/// @param liquidity The usable liquidity
+/// @param amountRemaining How much input or output amount is remaining to be swapped in/out
+/// @param feePips The fee taken from the input amount, expressed in hundredths of a bip
+/// @return sqrtRatioNextX96 The price after swapping the amount in/out, not to exceed the price target
+/// @return amountIn The amount to be swapped in, of either token0 or token1, based on the direction of the swap
+/// @return amountOut The amount to be received, of either token0 or token1, based on the direction of the swap
+/// @return feeAmount The amount of input that will be taken as a fee
+function swapMathComputeSwapStep(
+    /* uint160 */ sqrtRatioCurrentX96: nat,
+    /* uint160 */ sqrtRatioTargetX96: nat,
+    /* uint128 */ liquidity_swapMathComputeSwapStep: nat,
+    /* int256 */ amountRemaining: int,
+    /* uint24 */ feePips: nat
+) : nat * nat * nat * nat
+    /* sqrtRatioNextX96, */
+    /* amountIn, */
+    /* amountOut, */
+    /* feeAmount */
+{
+    var zeroForOne: bool = sqrtRatioCurrentX96 >= sqrtRatioTargetX96;
+    var exactIn: bool = amountRemaining >= 0;
+    var sqrtRatioNextX96: nat = 0;
+    var amountIn: nat = 0;
+    var amountOut: nat = 0;
+    var feeAmount: nat = 0;
 
-//     //         state.tick = zeroForOne ? step.tickNext - 1 : step.tickNext;
-//     //     } else if (state.sqrtPriceX96 != step.sqrtPriceStartX96) {
-//     //         // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
-//     //         state.tick = TickMath.getTickAtSqrtRatio(state.sqrtPriceX96);
-//     //     }
-//     // }
+    if exactIn then begin
+        const amountRemainingLessFee: nat ?= int_to_nat(abs(amountRemaining) * (1_000_000 - feePips) div 1_000_000) : INVALID_NAT;
+        amountIn := zeroForOne
+            ? sqrtPriceMathGetAmount0Delta_round(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, true)
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity_swapMathComputeSwapStep, true);
+        if (amountRemainingLessFee >= amountIn) then
+            sqrtRatioNextX96 := sqrtRatioTargetX96
+        else
+            sqrtRatioNextX96 := sqrtPriceMathGetNextSqrtPriceFromInput(
+                sqrtRatioCurrentX96,
+                liquidity_swapMathComputeSwapStep,
+                amountRemainingLessFee,
+                zeroForOne
+            );
+    end else begin
+        amountOut := zeroForOne
+            ? sqrtPriceMathGetAmount1Delta_round(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, false)
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity_swapMathComputeSwapStep, false);
+        if (abs(amountRemaining) >= amountOut) then
+            sqrtRatioNextX96 := sqrtRatioTargetX96
+        else
+            sqrtRatioNextX96 := sqrtPriceMathGetNextSqrtPriceFromOutput(
+                sqrtRatioCurrentX96,
+                liquidity_swapMathComputeSwapStep,
+                abs(amountRemaining),
+                zeroForOne
+            )
+    end;
 
-//     // // update tick and write an oracle entry if the tick change
-//     // if (state.tick != slot0Start.tick) {
-//     //     (uint16 observationIndex, uint16 observationCardinality) = observations.write(
-//     //         slot0Start.observationIndex,
-//     //         cache.blockTimestamp,
-//     //         slot0Start.tick,
-//     //         cache.liquidityStart,
-//     //         slot0Start.observationCardinality,
-//     //         slot0Start.observationCardinalityNext
-//     //     );
-//     //     (slot0.sqrtPriceX96, slot0.tick, slot0.observationIndex, slot0.observationCardinality) = (
-//     //         state.sqrtPriceX96,
-//     //         state.tick,
-//     //         observationIndex,
-//     //         observationCardinality
-//     //     );
-//     // } else {
-//     //     // otherwise just update the price
-//     //     slot0.sqrtPriceX96 = state.sqrtPriceX96;
-//     // }
+    const max_Val: bool = (sqrtRatioTargetX96 = sqrtRatioNextX96);
 
-//     // // update liquidity if it changed
-//     // if (cache.liquidityStart != state.liquidity) liquidity = state.liquidity;
+    // get the input/output amounts
+    if (zeroForOne) then begin
+        amountIn := (max_Val and exactIn)
+            ? amountIn
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioNextX96, sqrtRatioCurrentX96, liquidity, true);
+        amountOut := (max_Val and (exactIn = false))
+            ? amountOut
+            : sqrtPriceMathGetAmount1Delta_round(sqrtRatioNextX96, sqrtRatioCurrentX96, liquidity, false)
+    end else begin
+        amountIn := (max_Val and exactIn)
+            ? amountIn
+            : sqrtPriceMathGetAmount1Delta_round(sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity, true);
+        amountOut := (max_Val and (exactIn = false))
+            ? amountOut
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity, false)
+    end;
 
-//     // // update fee growth global and, if necessary, protocol fees
-//     // // overflow is acceptable, protocol has to withdraw before it hits type(uint128).max fees
-//     // if (zeroForOne) {
-//     //     feeGrowthGlobal0X128 = state.feeGrowthGlobalX128;
-//     //     if (state.protocolFee > 0) protocolFees.token0 += state.protocolFee;
-//     // } else {
-//     //     feeGrowthGlobal1X128 = state.feeGrowthGlobalX128;
-//     //     if (state.protocolFee > 0) protocolFees.token1 += state.protocolFee;
-//     // }
+    // cap the output amount to not exceed the remaining output amount
+    if ((exactIn = false) and (amountOut > abs(amountRemaining))) then
+        amountOut := abs(amountRemaining);
 
-//     // (amount0, amount1) = zeroForOne == exactInput
-//     //     ? (amountSpecified - state.amountSpecifiedRemaining, state.amountCalculated)
-//     //     : (state.amountCalculated, amountSpecified - state.amountSpecifiedRemaining);
+    if (exactIn and sqrtRatioNextX96 <> sqrtRatioTargetX96) then
+        // we didn't reach the target, so take the remainder of the maximum input as fee
+        feeAmount ?:= int_to_nat(abs(amountRemaining) - amountIn) : INVALID_NAT
+    else 
+        feeAmount := abs(ceil(amountIn * feePips / (1_000_000 - feePips)));
 
-//     // // do the transfers and collect payment
-//     // if (zeroForOne) {
-//     //     if (amount1 < 0) TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
+    return ((sqrtRatioNextX96, amountIn, amountOut, feeAmount))
+}
 
-//     //     uint256 balance0Before = balance0();
-//     //     IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
-//     //     require(balance0Before.add(uint256(amount0)) <= balance0(), 'IIA');
-//     // } else {
-//     //     if (amount0 < 0) TransferHelper.safeTransfer(token0, recipient, uint256(-amount0));
+/// @inheritdoc IUniswapV3PoolActions
+entry swap(
+    /* address */ recipient: address,
+    /* bool */ zeroForOne: bool,
+    /* int256 */ amountSpecified: int,
+    /* uint160 */ sqrtPriceLimitX96: nat,
+    /* bytes calldata */ data: bytes
+) 
+// /* external override returns */ : int * int /* (int256 amount0, int256 amount1) */ 
+{
+    require {swap_c1: noDelegateCall();}
 
-//     //     uint256 balance1Before = balance1();
-//     //     IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
-//     //     require(balance1Before.add(uint256(amount1)) <= balance1(), 'IIA');
-//     // }
+    effect {
+        do_require(amountSpecified <> 0, "AS");
+        // memory is not storage
+        var slot0Start: Slot0 = slot0;
+        do_require(slot0Start.unlocked, "LOK");
+        do_require(
+            zeroForOne
+                ? ((sqrtPriceLimitX96 < slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 > MIN_SQRT_RATIO))
+                : ((sqrtPriceLimitX96 > slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 < MAX_SQRT_RATIO)),
+            "SPL"
+        );
+        slot0.unlocked := false;
 
-//     // emit Swap(caller, recipient, amount0, amount1, state.sqrtPriceX96, state.liquidity, state.tick);
-//     // slot0.unlocked := true;
-// }
+        // memory is not storage
+        var cache: SwapCache = {
+            liquidity;
+            blockTimestamp_();
+            (zeroForOne ? (slot0Start.feeProtocol % 16) : (slot0Start.feeProtocol |>> 4));
+            0;
+            0;
+            false
+        };
+
+        var exactInput = amountSpecified > 0;
+
+        // memory is not storage
+        var state_swap_param: SwapState = {
+            amountSpecified;
+            0;
+            slot0Start.sqrtPriceX96;
+            slot0Start.tick;
+            (zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128);
+            0;
+            cache.liquidityStart_swapCache
+        };
+
+        // continue swapping as long as we haven't used the entire input/output and haven't reached the price limit
+        while (state_swap_param.amountSpecifiedRemaining_swapState <> 0 and state_swap_param.sqrtPriceX96_swapState <> sqrtPriceLimitX96) do
+            // memory is not storage
+            var step: StepComputations = {0; 0; false; 0; 0; 0; 0};
+
+            step.sqrtPriceStartX96_stepComputations := state_swap_param.sqrtPriceX96_swapState;
+
+            const retVal = tickBitmapNextInitializedTickWithinOneWord(
+                state_swap_param.tick_swapState,
+                tickSpacing,
+                zeroForOne
+            );
+
+            step.tickNext_stepComputations := retVal[0];
+            step.initialized_stepComputations := retVal[1];
+
+            // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
+            if (step.tickNext_stepComputations < MIN_TICK) then
+                step.tickNext_stepComputations := MIN_TICK
+            else begin
+                if (step.tickNext_stepComputations > MAX_TICK) then
+                    step.tickNext_stepComputations := MAX_TICK;
+            end;
+
+            // get the price for the next tick
+            step.sqrtPriceNextX96_stepComputations := tickMathGetSqrtRatioAtTick(step.tickNext_stepComputations);
+
+            // compute values to swap to the target tick, price limit, or point where input/output amount is exhausted
+            const retVal_computeSwapStep = swapMathComputeSwapStep(
+                state_swap_param.sqrtPriceX96_swapState,
+                (zeroForOne ? step.sqrtPriceNextX96_stepComputations < sqrtPriceLimitX96 : step.sqrtPriceNextX96_stepComputations > sqrtPriceLimitX96)
+                    ? sqrtPriceLimitX96
+                    : step.sqrtPriceNextX96_stepComputations,
+                state_swap_param.liquidity_swapState,
+                state_swap_param.amountSpecifiedRemaining_swapState,
+                fee
+            );
+            state_swap_param.sqrtPriceX96_swapState := retVal_computeSwapStep[0];
+            step.amountIn_stepComputations := retVal_computeSwapStep[1];
+            step.amountOut_stepComputations := retVal_computeSwapStep[2];
+            step.feeAmount_stepComputations := retVal_computeSwapStep[3];
+
+            if (exactInput) then begin
+                state_swap_param.amountSpecifiedRemaining_swapState -= (step.amountIn_stepComputations + step.feeAmount_stepComputations);
+                state_swap_param.amountCalculated_swapState := state_swap_param.amountCalculated_swapState - step.amountOut_stepComputations
+            end else begin
+                state_swap_param.amountSpecifiedRemaining_swapState += step.amountOut_stepComputations;
+                state_swap_param.amountCalculated_swapState := state_swap_param.amountCalculated_swapState + step.amountIn_stepComputations + step.feeAmount_stepComputations
+            end;
+
+            // if the protocol fee is on, calculate how much is owed, decrement feeAmount, and increment protocolFee
+            if (cache.feeProtocol_swapCache > 0) then begin
+                const delta: nat = step.feeAmount_stepComputations div cache.feeProtocol_swapCache;
+                step.feeAmount_stepComputations -= delta;
+                state_swap_param.protocolFee_swapState += delta
+            end;
+
+            // update global fee tracker
+            if (state_swap_param.liquidity_swapState > 0) then
+                state_swap_param.feeGrowthGlobalX128_swapState += (step.feeAmount_stepComputations * Q128 div state_swap_param.liquidity_swapState);
+
+            // shift tick if we reached the next price
+            if (state_swap_param.sqrtPriceX96_swapState = step.sqrtPriceNextX96_stepComputations) then begin
+                // if the tick is initialized, run the tick transition
+                if (step.initialized_stepComputations) then begin
+                    // check for the placeholder value, which we replace with the actual value the first time the swap
+                    // crosses an initialized tick
+                    if (cache.computedLatestObservation_swapCache = false) then begin
+                        const retVal_observationsObserveSingle : (int * nat) = observationsObserveSingle(
+                            cache.blockTimestamp_swapCache,
+                            0,
+                            slot0Start.tick,
+                            slot0Start.observationIndex,
+                            cache.liquidityStart_swapCache,
+                            slot0Start.observationCardinality
+                        );
+                        cache.tickCumulative_swapCache := retVal_observationsObserveSingle[0];
+                        cache.secondsPerLiquidityCumulativeX128_swapCache := retVal_observationsObserveSingle[1];
+                        cache.computedLatestObservation_swapCache := true;
+                    end;
+
+                    // var liquidityNet: int = ticks.cross(
+                    //     step.tickNext_stepComputations,
+                    //     (zeroForOne ? state_swap_param.feeGrowthGlobalX128_swapState : feeGrowthGlobal0X128),
+                    //     (zeroForOne ? feeGrowthGlobal1X128 : state_swap_param.feeGrowthGlobalX128_swapState),
+                    //     cache.secondsPerLiquidityCumulativeX128_swapCache,
+                    //     cache.tickCumulative_swapCache,
+                    //     cache.blockTimestamp_swapCache
+                    // );
+
+                    /// @notice Transitions to next tick as needed by price movement
+                    /// @param self The mapping containing all tick information for initialized ticks
+                    /// @param tick The destination tick of the transition
+                    /// @param feeGrowthGlobal0X128 The all-time global fee growth, per unit of liquidity, in token0
+                    /// @param feeGrowthGlobal1X128 The all-time global fee growth, per unit of liquidity, in token1
+                    /// @param secondsPerLiquidityCumulativeX128 The current seconds per liquidity
+                    /// @param tickCumulative The tick * time elapsed since the pool was first initialized
+                    /// @param time The current block.timestamp
+                    /// @return liquidityNet The amount of liquidity added (subtracted) when tick is crossed from left to right (right to left)
+                    // function cross(
+                    // mapping(int24 => Tick.Info) storage self,
+                    // int24 tick,
+                    // uint256 feeGrowthGlobal0X128,
+                    // uint256 feeGrowthGlobal1X128,
+                    // uint160 secondsPerLiquidityCumulativeX128,
+                    // int56 tickCumulative,
+                    // uint32 time
+                    // ) internal returns (int128 liquidityNet) {
+                    const tick_param: int = step.tickNext_stepComputations;
+                    const feeGrowthGlobal0X128_param: nat = (zeroForOne ? state_swap_param.feeGrowthGlobalX128_swapState : feeGrowthGlobal0X128);
+                    const feeGrowthGlobal1X128_param: nat = (zeroForOne ? feeGrowthGlobal1X128 : state_swap_param.feeGrowthGlobalX128_swapState);
+                    const secondsPerLiquidityCumulativeX128_param: nat = cache.secondsPerLiquidityCumulativeX128_swapCache;
+                    const tickCumulative_param: int = cache.tickCumulative_swapCache;
+                    const time_param: nat = cache.blockTimestamp_swapCache;
+
+                    ticks[tick_param].info.feeGrowthOutside0X128 ?:= int_to_nat(feeGrowthGlobal0X128_param - ticks[tick_param].info.feeGrowthOutside0X128) : INVALID_NAT;
+                    ticks[tick_param].info.feeGrowthOutside1X128 ?:= int_to_nat(feeGrowthGlobal1X128_param - ticks[tick_param].info.feeGrowthOutside1X128) : INVALID_NAT;
+                    ticks[tick_param].info.secondsPerLiquidityOutsideX128 ?:= int_to_nat(secondsPerLiquidityCumulativeX128_param - ticks[tick_param].info.secondsPerLiquidityOutsideX128) : INVALID_NAT;
+                    ticks[tick_param].info.tickCumulativeOutside := tickCumulative_param - ticks[tick_param].info.tickCumulativeOutside;
+                    ticks[tick_param].info.secondsOutside ?:= int_to_nat(time_param - ticks[tick_param].info.secondsOutside) : INVALID_NAT;
+                    
+                    var liquidityNet_param: int = ticks[tick_param].info.liquidityNet;
+                    // }
+
+                    // if we're moving leftward, we interpret liquidityNet as the opposite sign
+                    // safe because liquidityNet cannot be type(int128).min
+                    if (zeroForOne) then
+                        liquidityNet_param := -liquidityNet_param;
+
+                    state_swap_param.liquidity_swapState ?:= int_to_nat(state_swap_param.liquidity_swapState + liquidityNet_param) : INVALID_NAT
+                end;
+
+                state_swap_param.tick_swapState := zeroForOne ? (step.tickNext_stepComputations - 1) : step.tickNext_stepComputations
+            end else begin 
+                if (state_swap_param.sqrtPriceX96_swapState <> step.sqrtPriceStartX96_stepComputations) then
+                    // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
+                    state_swap_param.tick_swapState := tickMathGetTickAtSqrtRatio(state_swap_param.sqrtPriceX96_swapState)
+            end
+        done;
+        // update tick and write an oracle entry if the tick change
+        if (state_swap_param.tick_swapState <> slot0Start.tick) then begin
+            var observationIndex_param: nat = 0;
+            var observationCardinality_param: nat = 0;
+            // (uint16 observationIndex, uint16 observationCardinality) = observations.write(
+            //     slot0Start.observationIndex,
+            //     cache.blockTimestamp_swapCache,
+            //     slot0Start.tick,
+            //     cache.liquidityStart_swapCache,
+            //     slot0Start.observationCardinality,
+            //     slot0Start.observationCardinalityNext
+            // );
+            /// @notice Writes an oracle observation to the array
+            /// @dev Writable at most once per block. Index represents the most recently written element. cardinality and index must be tracked externally.
+            /// If the index is at the end of the allowable array length (according to cardinality), and the next cardinality
+            /// is greater than the current one, cardinality may be increased. This restriction is created to preserve ordering.
+            /// @param self The stored oracle array
+            /// @param index The index of the observation that was most recently written to the observations array
+            /// @param blockTimestamp The timestamp of the new observation
+            /// @param tick The active tick at the time of the new observation
+            /// @param liquidity The total in-range liquidity at the time of the new observation
+            /// @param cardinality The number of populated elements in the oracle array
+            /// @param cardinalityNext The new length of the oracle array, independent of population
+            /// @return indexUpdated The new index of the most recently written element in the oracle array
+            /// @return cardinalityUpdated The new cardinality of the oracle array
+            // function write(
+            //     Observation[65535] storage self,
+            //     uint16 slot0Start.observationIndex,
+            //     uint32 cache.blockTimestamp_swapCache,
+            //     int24 slot0Start.tick,
+            //     uint128 cache.liquidityStart_swapCache,
+            //     uint16 slot0Start.observationCardinality,
+            //     uint16 slot0Start.observationCardinalityNext
+            // ) internal returns (uint16 indexUpdated, uint16 cardinalityUpdated) {
+            const last = observations[slot0Start.observationIndex].observation_value;
+
+            // early return if we've already written an observation this block
+            if (last.blockTimestamp_Obs = cache.blockTimestamp_swapCache) then begin
+                observationIndex_param := slot0Start.observationIndex;
+                observationCardinality_param := slot0Start.observationCardinality
+            end else begin
+                var indexUpdated = 0;
+                var cardinalityUpdated = 0;
+                // if the conditions are right, we can bump the cardinality
+                if ((slot0Start.observationCardinalityNext > slot0Start.observationCardinality) and (slot0Start.observationIndex = (slot0Start.observationCardinality - 1))) then 
+                    cardinalityUpdated := slot0Start.observationCardinalityNext
+                else
+                    cardinalityUpdated := slot0Start.observationCardinality;
+
+                indexUpdated := (slot0Start.observationIndex + 1) % cardinalityUpdated;
+                observations[indexUpdated].observation_value := transform(last, cache.blockTimestamp_swapCache, slot0Start.tick, cache.liquidityStart_swapCache);
+                // } // end function write
+                observationIndex_param := indexUpdated;
+                observationCardinality_param := cardinalityUpdated;
+            end;
+            slot0.sqrtPriceX96 := state_swap_param.sqrtPriceX96_swapState;
+            slot0.tick := state_swap_param.tick_swapState;
+            slot0.observationIndex := observationIndex_param;
+            slot0.observationCardinality := observationCardinality_param
+        end else
+            // otherwise just update the price
+            slot0.sqrtPriceX96 := state_swap_param.sqrtPriceX96_swapState;
+
+        // update liquidity if it changed
+        if (cache.liquidityStart_swapCache <> state_swap_param.liquidity_swapState) then
+            liquidity := state_swap_param.liquidity_swapState;
+
+        // update fee growth global and, if necessary, protocol fees
+        // overflow is acceptable, protocol has to withdraw before it hits type(uint128).max fees
+        if zeroForOne then begin
+            feeGrowthGlobal0X128 := state_swap_param.feeGrowthGlobalX128_swapState;
+            if (state_swap_param.protocolFee_swapState > 0) then 
+                protocolFees.token0_fees += state_swap_param.protocolFee_swapState
+        end else begin
+            feeGrowthGlobal1X128 := state_swap_param.feeGrowthGlobalX128_swapState;
+            if (state_swap_param.protocolFee_swapState > 0) then 
+                protocolFees.token1_fees += state_swap_param.protocolFee_swapState
+        end;
+
+        const amount0: int = (zeroForOne = exactInput)
+            ? (amountSpecified - state_swap_param.amountSpecifiedRemaining_swapState)
+            : state_swap_param.amountCalculated_swapState;
+        const amount1: int = (zeroForOne = exactInput)
+            ? state_swap_param.amountCalculated_swapState
+            : (amountSpecified - state_swap_param.amountSpecifiedRemaining_swapState);
+
+        // balance0 += amount0_nat;
+        // balance1 += amount1_nat;
+
+        // transfer 0tz to token0 call %transfer<address * address * nat>((unpack_val.payer, self_address, amount0_nat));
+        // transfer 0tz to token1 call %transfer<address * address * nat>((unpack_val.payer, self_address, amount1_nat));
+
+        // TODO + please check amount amd amount_min slippage check
+    
+        // do the transfers and collect payment
+        if zeroForOne then begin
+            if (amount1 < 0) then begin
+                // TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
+                transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, abs(amount1)));
+                balance1 -= abs(amount1)
+            end;
+
+            // uint256 balance0Before = balance0();
+            var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_UNPACK;
+            const amount0_nat ?= int_to_nat(amount0) : INVALID_NAT;
+            transfer 0tz to token0 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount0_nat));
+            balance0 += amount0;
+            // should be remove token transfer part
+            // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
+            transfer 0tz to caller call uniswapV3SwapCallback<int * int * bytes>((amount0, amount1, data))
+            
+            // do_require(balance0Before.add(uint256(amount0)) <= balance0(), "IIA");
+        end else begin
+            if (amount0 < 0) then begin
+                // TransferHelper.safeTransfer(token0, recipient, uint256(-amount0));
+                transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)));
+                balance0 -= abs(amount0);
+            end;
+
+            // uint256 balance1Before = balance1();
+            var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_UNPACK;
+            const amount1_nat ?= int_to_nat(amount1) : INVALID_NAT;
+            transfer 0tz to token1 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount1_nat));
+            balance0 += amount1;
+            // should be remove token transfer part
+            // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
+            transfer 0tz to caller call uniswapV3SwapCallback<int * int * bytes>((amount0, amount1, data))
+            
+            // do_require(balance1Before.add(uint256(amount1)) <= balance1(), "IIA");
+        end;
+
+        emit<Swap>({caller; recipient; amount0; amount1; state_swap_param.sqrtPriceX96_swapState; state_swap_param.liquidity_swapState; state_swap_param.tick_swapState});
+        slot0.unlocked := true;
+    }
+}
 
 // /// @inheritdoc IUniswapV3PoolActions
 // entry flash(
@@ -2187,13 +2698,13 @@ entry burn(
 
 //     // if (paid0 > 0) {
 //     //     uint8 feeProtocol0 = slot0.feeProtocol % 16;
-//     //     uint256 fees0 = feeProtocol0 == 0 ? 0 : paid0 / feeProtocol0;
+//     //     uint256 fees0 = feeProtocol0 = 0 ? 0 : paid0 / feeProtocol0;
 //     //     if (uint128(fees0) > 0) protocolFees.token0 += uint128(fees0);
 //     //     feeGrowthGlobal0X128 += FullMath.mulDiv(paid0 - fees0, FixedPoint128.Q128, _liquidity);
 //     // }
 //     // if (paid1 > 0) {
 //     //     uint8 feeProtocol1 = slot0.feeProtocol >> 4;
-//     //     uint256 fees1 = feeProtocol1 == 0 ? 0 : paid1 / feeProtocol1;
+//     //     uint256 fees1 = feeProtocol1 = 0 ? 0 : paid1 / feeProtocol1;
 //     //     if (uint128(fees1) > 0) protocolFees.token1 += uint128(fees1);
 //     //     feeGrowthGlobal1X128 += FullMath.mulDiv(paid1 - fees1, FixedPoint128.Q128, _liquidity);
 //     // }
