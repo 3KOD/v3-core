@@ -1,0 +1,880 @@
+# (Pair owner { Elt 500 10; Elt 3000 60; Elt 10000 200 } { })
+{
+  storage (pair (address %owner) (big_map %feeAmountTickSpacing nat int) (big_map %getPool (pair address address nat) address));
+  parameter (or (or (pair %createPool (address %tokenA) (pair (address %tokenB) (nat %fee_))) (address %setOwner)) (pair %enableFeeAmount (nat %fee_) (int %tickSpacing_)));
+  code { LAMBDA
+           unit
+           bool
+           { PUSH unit Unit;
+             SELF_ADDRESS;
+             SELF_ADDRESS;
+             COMPARE;
+             NEQ;
+             IF
+               { SELF_ADDRESS;
+                 PUSH string "DelegateCall";
+                 PAIR;
+                 FAILWITH }
+               {  };
+             PUSH bool True;
+             SWAP;
+             DROP;
+             SWAP;
+             DROP };
+         LAMBDA
+           int
+           nat
+           { PUSH unit Unit;
+             DUP 2;
+             DUP 3;
+             PUSH int -887272;
+             EDIV;
+             IF_NONE
+               { PUSH string "DivByZero";
+                 FAILWITH }
+               { DUP;
+                 CAR;
+                 SWAP;
+                 DROP };
+             MUL;
+             DUP 3;
+             DUP 4;
+             PUSH int 887272;
+             EDIV;
+             IF_NONE
+               { PUSH string "DivByZero";
+                 FAILWITH }
+               { DUP;
+                 CAR;
+                 SWAP;
+                 DROP };
+             MUL;
+             PUSH int 1;
+             DUP 5;
+             DUP 4;
+             DUP 4;
+             SUB;
+             EDIV;
+             IF_NONE
+               { PUSH string "DivByZero";
+                 FAILWITH }
+               { DUP;
+                 CAR;
+                 SWAP;
+                 DROP };
+             ADD;
+             DUP;
+             PUSH int 1;
+             PUSH nat 128;
+             PUSH nat 1;
+             LSL;
+             INT;
+             SUB;
+             EDIV;
+             IF_NONE
+               { PUSH string "DivByZero";
+                 FAILWITH }
+               { DUP;
+                 CAR;
+                 SWAP;
+                 DROP };
+             ISNAT;
+             IF_NONE
+               { PUSH nat 0 }
+               {  };
+             DUP;
+             DIP { DIG 4; DROP };
+             DUG 4;
+             DROP 4;
+             DUG 1;
+             DROP };
+         NIL operation;
+         DIG 3;
+         UNPAIR;
+         DIP { UNPAIR 3 };
+         IF_LEFT
+           { IF_LEFT
+               { UNPAIR;
+                 SWAP;
+                 UNPAIR;
+                 SWAP;
+                 DUP 9;
+                 UNIT;
+                 EXEC;
+                 NOT;
+                 IF
+                   { PUSH string "createPool1";
+                     PUSH string "INVALID_CONDITION";
+                     PAIR;
+                     FAILWITH }
+                   {  };
+                 DUP 2;
+                 DUP 4;
+                 COMPARE;
+                 NEQ;
+                 NOT;
+                 IF
+                   { PUSH string "createPool2";
+                     PUSH string "INVALID_CONDITION";
+                     PAIR;
+                     FAILWITH }
+                   {  };
+                 DUP 2;
+                 DUP 4;
+                 COMPARE;
+                 LT;
+                 IF
+                   { DUP 3 }
+                   { DUP 2 };
+                 DUP 3;
+                 DUP 5;
+                 COMPARE;
+                 LT;
+                 IF
+                   { DUP 3 }
+                   { DUP 4 };
+                 DUP 7;
+                 DUP 4;
+                 GET;
+                 IF_NONE
+                   { PUSH string "feeAmountTickSpacing";
+                     PUSH string "ASSET_NOT_FOUND";
+                     PAIR;
+                     FAILWITH }
+                   {  };
+                 PUSH int 0;
+                 DUP 2;
+                 COMPARE;
+                 NEQ;
+                 NOT;
+                 IF
+                   { DUP;
+                     PUSH string "INVALID_TICK_SPACING";
+                     PAIR;
+                     FAILWITH }
+                   {  };
+                 DUP 9;
+                 DUP 5;
+                 DUP 4;
+                 PAIR;
+                 DUP 5;
+                 PAIR;
+                 GET;
+                 IF_NONE
+                   { NONE address }
+                   { DUP;
+                     SOME;
+                     SWAP;
+                     DROP };
+                 IF_NONE
+                   { PUSH bool True }
+                   { PUSH bool False;
+                     SWAP;
+                     DROP };
+                 NOT;
+                 IF
+                   { DUP 9;
+                     DUP 5;
+                     DUP 4;
+                     PAIR;
+                     DUP 5;
+                     PAIR;
+                     GET;
+                     IF_NONE
+                       { PUSH string "getPool";
+                         PUSH string "ASSET_NOT_FOUND";
+                         PAIR;
+                         FAILWITH }
+                       {  };
+                     PUSH string "INVALID_GET_POOL";
+                     PAIR;
+                     FAILWITH }
+                   {  };
+                 PUSH mutez 0;
+                 DUP 12;
+                 DUP 3;
+                 EXEC;
+                 PUSH bool False;
+                 PUSH nat 0;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 PUSH int 0;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 EMPTY_BIG_MAP nat (pair nat int nat bool);
+                 EMPTY_BIG_MAP (pair address int int) (pair nat (pair nat nat) nat nat);
+                 PAIR;
+                 EMPTY_BIG_MAP int nat;
+                 PAIR;
+                 EMPTY_BIG_MAP int (pair nat int nat nat int nat nat bool);
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 PUSH nat 0;
+                 PUSH nat 0;
+                 PAIR;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 DUP 2;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 PUSH nat 0;
+                 PAIR;
+                 DUP 3;
+                 PAIR;
+                 DUP 5;
+                 PAIR;
+                 DUP 8;
+                 PAIR;
+                 DUP 6;
+                 PAIR;
+                 DUP 7;
+                 PAIR;
+                 SELF_ADDRESS;
+                 PAIR;
+                 DUP;
+                 DUP 5;
+                 NONE key_hash;
+                 CREATE_CONTRACT
+                   { storage
+                       (pair (address %factory)
+                             (address %token0)
+                             (address %token1)
+                             (nat %fee)
+                             (int %tickSpacing)
+                             (nat %maxLiquidityPerTick)
+                             (nat %balance0)
+                             (nat %balance1)
+                             (pair %slot0
+                                (nat %sqrtPriceX96)
+                                (int %tick)
+                                (nat %observationIndex)
+                                (nat %observationCardinality)
+                                (nat %observationCardinalityNext)
+                                (nat %feeProtocol)
+                                (bool %unlocked))
+                             (nat %feeGrowthGlobal0X128)
+                             (nat %feeGrowthGlobal1X128)
+                             (pair %protocolFees (nat %token0) (nat %token1))
+                             (nat %liquidity)
+                             (big_map %ticks
+                                int
+                                (pair (nat %liquidityGross)
+                                      (int %liquidityNet)
+                                      (nat %feeGrowthOutside0X128)
+                                      (nat %feeGrowthOutside1X128)
+                                      (int %tickCumulativeOutside)
+                                      (nat %secondsPerLiquidityOutsideX128)
+                                      (nat %secondsOutside)
+                                      (bool %initialized)))
+                             (big_map %tickBitmap int nat)
+                             (big_map %positions
+                                (pair address int int)
+                                (pair (nat %liquidity)
+                                      (pair (nat %feeGrowthInside0LastX128) (nat %feeGrowthInside1LastX128))
+                                      (pair (nat %tokensOwed0) (nat %tokensOwed1))))
+                             (big_map %observations
+                                nat
+                                (pair (nat %blockTimestamp)
+                                      (pair (int %tickCumulative)
+                                            (nat %secondsPerLiquidityCumulativeX128)
+                                            (bool %initialized))))) ;
+                     parameter unit ;
+                     code { LAMBDA
+                              unit
+                              bool
+                              { PUSH unit Unit ;
+                                SELF_ADDRESS ;
+                                SELF_ADDRESS ;
+                                COMPARE ;
+                                NEQ ;
+                                IF { SELF_ADDRESS ; PUSH string "DelegateCall" ; PAIR ; FAILWITH } {} ;
+                                PUSH bool True ;
+                                SWAP ;
+                                DROP ;
+                                SWAP ;
+                                DROP } ;
+                            LAMBDA
+                              address
+                              bool
+                              { PUSH unit Unit ;
+                                DUP 2 ;
+                                PUSH unit Unit ;
+                                VIEW "getOwner" address ;
+                                IF_NONE { PUSH string "VIEW_OWNER_ERR" ; FAILWITH } {} ;
+                                DUP ;
+                                SENDER ;
+                                COMPARE ;
+                                EQ ;
+                                NOT ;
+                                IF { PUSH string "ONLY_FACTORY_OWNER_ERR" ; FAILWITH } {} ;
+                                PUSH bool True ;
+                                DIP { DIG 1 ; DROP } ;
+                                DUG 1 ;
+                                DROP ;
+                                DUG 1 ;
+                                DROP } ;
+                            LAMBDA
+                              (pair int int)
+                              bool
+                              { UNPAIR 2 ;
+                                PUSH unit Unit ;
+                                DUP 3 ;
+                                DUP 3 ;
+                                COMPARE ;
+                                LT ;
+                                NOT ;
+                                IF { PUSH string "TLU" ; FAILWITH } {} ;
+                                PUSH int -887272 ;
+                                DUP 3 ;
+                                COMPARE ;
+                                GE ;
+                                NOT ;
+                                IF { PUSH string "TLM" ; FAILWITH } {} ;
+                                PUSH int 887272 ;
+                                DUP 4 ;
+                                COMPARE ;
+                                LE ;
+                                NOT ;
+                                IF { PUSH string "TUM" ; FAILWITH } {} ;
+                                PUSH bool True ;
+                                SWAP ;
+                                DROP ;
+                                DUG 2 ;
+                                DROP 2 } ;
+                            LAMBDA
+                              unit
+                              nat
+                              { PUSH unit Unit ;
+                                PUSH int 1 ;
+                                PUSH timestamp 0 ;
+                                NOW ;
+                                SUB ;
+                                EDIV ;
+                                IF_NONE { PUSH string "DivByZero" ; FAILWITH } { DUP ; CAR ; SWAP ; DROP } ;
+                                ISNAT ;
+                                IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                                DUP ;
+                                DIP { DIG 1 ; DROP } ;
+                                DUG 1 ;
+                                DROP ;
+                                SWAP ;
+                                DROP } ;
+                            DIG 4 ;
+                            CDR ;
+                            NIL operation ;
+                            PAIR ;
+                            DIP { DROP 4 } } ;
+                     view "blockTimestamp_view"
+                          unit
+                          nat
+                          { DROP ;
+                            UNIT ;
+                            PUSH int 1 ;
+                            PUSH timestamp 0 ;
+                            NOW ;
+                            SUB ;
+                            EDIV ;
+                            IF_NONE { PUSH string "DivByZero" ; FAILWITH } { DUP ; CAR ; SWAP ; DROP } ;
+                            ISNAT ;
+                            IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                            DUP ;
+                            DIP { DIG 1 ; DROP } ;
+                            DUG 1 ;
+                            DROP } ;
+                     view "snapshotCumulativesInside"
+                          (pair int int)
+                          (pair int nat nat)
+                          { UNPAIR ;
+                            DIP { CDR ;
+                                  CDR ;
+                                  CDR ;
+                                  CDR ;
+                                  CDR ;
+                                  CDR ;
+                                  CDR ;
+                                  CDR ;
+                                  UNPAIR ;
+                                  SWAP ;
+                                  CDR ;
+                                  CDR ;
+                                  CDR ;
+                                  UNPAIR ;
+                                  SWAP ;
+                                  UNPAIR ;
+                                  SWAP ;
+                                  DROP } ;
+                            UNPAIR ;
+                            UNIT ;
+                            SELF_ADDRESS ;
+                            SELF_ADDRESS ;
+                            COMPARE ;
+                            NEQ ;
+                            IF { SELF_ADDRESS ; PUSH string "DelegateCall" ; PAIR ; FAILWITH } {} ;
+                            DUP 3 ;
+                            DUP 3 ;
+                            COMPARE ;
+                            LT ;
+                            NOT ;
+                            IF { PUSH string "TLU" ; FAILWITH } {} ;
+                            PUSH int -887272 ;
+                            DUP 3 ;
+                            COMPARE ;
+                            GE ;
+                            NOT ;
+                            IF { PUSH string "TLM" ; FAILWITH } {} ;
+                            PUSH int 887272 ;
+                            DUP 4 ;
+                            COMPARE ;
+                            LE ;
+                            NOT ;
+                            IF { PUSH string "TUM" ; FAILWITH } {} ;
+                            PUSH int 0 ;
+                            PUSH nat 0 ;
+                            PUSH nat 0 ;
+                            PUSH int 0 ;
+                            PUSH int 0 ;
+                            PUSH nat 0 ;
+                            PUSH nat 0 ;
+                            PUSH nat 0 ;
+                            PUSH nat 0 ;
+                            DUP 13 ;
+                            DUP 12 ;
+                            GET ;
+                            IF_NONE
+                              { PUSH string "ticks" ; PUSH string "ASSET_NOT_FOUND" ; PAIR ; FAILWITH }
+                              {} ;
+                            DUP 14 ;
+                            DUP 14 ;
+                            GET ;
+                            IF_NONE
+                              { PUSH string "ticks" ; PUSH string "ASSET_NOT_FOUND" ; PAIR ; FAILWITH }
+                              {} ;
+                            DUP 2 ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CAR ;
+                            DIP { DIG 7 ; DROP } ;
+                            DUG 7 ;
+                            DUP 2 ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CAR ;
+                            DIP { DIG 5 ; DROP } ;
+                            DUG 5 ;
+                            DUP 2 ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CAR ;
+                            DIP { DIG 3 ; DROP } ;
+                            DUG 3 ;
+                            DUP 2 ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            NOT ;
+                            IF { PUSH string "ERR" ; FAILWITH } {} ;
+                            DUP ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CAR ;
+                            DIP { DIG 6 ; DROP } ;
+                            DUG 6 ;
+                            DUP ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CAR ;
+                            DIP { DIG 4 ; DROP } ;
+                            DUG 4 ;
+                            DUP ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CAR ;
+                            DIP { DIG 2 ; DROP } ;
+                            DUG 2 ;
+                            DUP ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            CDR ;
+                            NOT ;
+                            IF { PUSH string "ERR" ; FAILWITH } {} ;
+                            DUP 17 ;
+                            DUP 14 ;
+                            DUP 2 ;
+                            CDR ;
+                            CAR ;
+                            COMPARE ;
+                            LT ;
+                            IF { DUP 8 ;
+                                 DUP 10 ;
+                                 SUB ;
+                                 DIP { DIG 11 ; DROP } ;
+                                 DUG 11 ;
+                                 DUP 6 ;
+                                 INT ;
+                                 DUP 8 ;
+                                 INT ;
+                                 SUB ;
+                                 ISNAT ;
+                                 IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                                 DIP { DIG 10 ; DROP } ;
+                                 DUG 10 ;
+                                 DUP 4 ;
+                                 INT ;
+                                 DUP 6 ;
+                                 INT ;
+                                 SUB ;
+                                 ISNAT ;
+                                 IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                                 DIP { DIG 9 ; DROP } ;
+                                 DUG 9 ;
+                                 DUP 10 ;
+                                 DUP 12 ;
+                                 PAIR ;
+                                 DUP 13 ;
+                                 PAIR ;
+                                 DIP { DIG 12 ; DROP } ;
+                                 DUG 12 }
+                               {} ;
+                            DUP 15 ;
+                            DUP 2 ;
+                            CDR ;
+                            CAR ;
+                            COMPARE ;
+                            LT ;
+                            IF { SELF_ADDRESS ;
+                                 PUSH unit Unit ;
+                                 VIEW "blockTimestamp_" nat ;
+                                 IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                                 SELF_ADDRESS ;
+                                 DUP 3 ;
+                                 CDR ;
+                                 CDR ;
+                                 CDR ;
+                                 CAR ;
+                                 DUP 20 ;
+                                 PAIR ;
+                                 DUP 4 ;
+                                 CDR ;
+                                 CDR ;
+                                 CAR ;
+                                 PAIR ;
+                                 DUP 4 ;
+                                 CDR ;
+                                 CAR ;
+                                 PAIR ;
+                                 PUSH nat 0 ;
+                                 PAIR ;
+                                 DUP 3 ;
+                                 PAIR ;
+                                 VIEW "observationsObserveSingle_view" (pair int nat) ;
+                                 IF_NONE { PUSH string "INVALID_RECORD" ; FAILWITH } {} ;
+                                 DUP ;
+                                 CAR ;
+                                 DUP 2 ;
+                                 CDR ;
+                                 DUP 12 ;
+                                 DUP 14 ;
+                                 DUP 4 ;
+                                 SUB ;
+                                 SUB ;
+                                 DIP { DIG 15 ; DROP } ;
+                                 DUG 15 ;
+                                 DUP 10 ;
+                                 INT ;
+                                 DUP 12 ;
+                                 INT ;
+                                 DUP 3 ;
+                                 INT ;
+                                 SUB ;
+                                 SUB ;
+                                 ISNAT ;
+                                 IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                                 DIP { DIG 14 ; DROP } ;
+                                 DUG 14 ;
+                                 DUP 8 ;
+                                 INT ;
+                                 DUP 10 ;
+                                 INT ;
+                                 DUP 6 ;
+                                 INT ;
+                                 SUB ;
+                                 SUB ;
+                                 ISNAT ;
+                                 IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                                 DIP { DIG 13 ; DROP } ;
+                                 DUG 13 ;
+                                 DUP 14 ;
+                                 DUP 16 ;
+                                 PAIR ;
+                                 DUP 17 ;
+                                 PAIR ;
+                                 DIP { DIG 16 ; DROP } ;
+                                 DUG 16 ;
+                                 DROP 4 }
+                               {} ;
+                            DUP 9 ;
+                            DUP 9 ;
+                            SUB ;
+                            DIP { DIG 11 ; DROP } ;
+                            DUG 11 ;
+                            DUP 7 ;
+                            INT ;
+                            DUP 7 ;
+                            INT ;
+                            SUB ;
+                            ISNAT ;
+                            IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                            DIP { DIG 10 ; DROP } ;
+                            DUG 10 ;
+                            DUP 5 ;
+                            INT ;
+                            DUP 5 ;
+                            INT ;
+                            SUB ;
+                            ISNAT ;
+                            IF_NONE { PUSH string "INVALID_NAT" ; FAILWITH } {} ;
+                            DIP { DIG 9 ; DROP } ;
+                            DUG 9 ;
+                            DUP 10 ;
+                            DUP 12 ;
+                            PAIR ;
+                            DUP 13 ;
+                            PAIR ;
+                            DIP { DIG 12 ; DROP } ;
+                            DUG 12 ;
+                            DROP 12 ;
+                            DIP { DROP 5 } } };
+                 PAIR;
+                 NIL operation;
+                 DUP 2;
+                 CAR;
+                 CONS;
+                 DIP { DIG 14; DROP };
+                 DUG 14;
+                 DUP 14;
+                 DUP 2;
+                 CDR;
+                 SOME;
+                 DUP 11;
+                 DUP 10;
+                 PAIR;
+                 DUP 11;
+                 PAIR;
+                 UPDATE;
+                 DIP { DIG 13; DROP };
+                 DUG 13;
+                 DUP 14;
+                 DUP 2;
+                 CDR;
+                 SOME;
+                 DUP 11;
+                 DUP 11;
+                 PAIR;
+                 DUP 10;
+                 PAIR;
+                 UPDATE;
+                 DIP { DIG 13; DROP };
+                 DUG 13;
+                 NIL operation;
+                 NIL operation;
+                 DUP 17;
+                 ITER { CONS };
+                 DUP 3;
+                 CDR;
+                 DUP 9;
+                 PAIR;
+                 DUP 12;
+                 PAIR;
+                 DUP 10;
+                 PAIR;
+                 DUP 11;
+                 PAIR;
+                 EMIT %PoolCreated (pair (address %token0) (address %token1) (nat %fee) (int %tickSpacing) (address %pool));
+                 CONS;
+                 ITER { CONS };
+                 DIP { DIG 14; DROP };
+                 DUG 14;
+                 DROP 11;
+                 PAIR 3;
+                 DIG 1;
+                 PAIR }
+               { DUP 2;
+                 SENDER;
+                 COMPARE;
+                 EQ;
+                 NOT;
+                 IF
+                   { PUSH string "INVALID_CALLER";
+                     FAILWITH }
+                   {  };
+                 NIL operation;
+                 NIL operation;
+                 DUP 7;
+                 ITER { CONS };
+                 DUP 3;
+                 DUP 5;
+                 PAIR;
+                 EMIT %OwnerChanged (pair (address %oldOwner) (address %newOwner));
+                 CONS;
+                 ITER { CONS };
+                 DIP { DIG 4; DROP };
+                 DUG 4;
+                 DUP;
+                 DIP { DIG 1; DROP };
+                 DUG 1;
+                 DROP;
+                 PAIR 3;
+                 DIG 1;
+                 PAIR } }
+           { UNPAIR;
+             SWAP;
+             DUP 3;
+             SENDER;
+             COMPARE;
+             EQ;
+             NOT;
+             IF
+               { PUSH string "INVALID_CALLER";
+                 FAILWITH }
+               {  };
+             PUSH nat 1000000;
+             DUP 3;
+             COMPARE;
+             LT;
+             NOT;
+             IF
+               { PUSH string "enableFeeAmount1";
+                 PUSH string "INVALID_CONDITION";
+                 PAIR;
+                 FAILWITH }
+               {  };
+             PUSH int 0;
+             DUP 2;
+             COMPARE;
+             GT;
+             NOT;
+             IF
+               { PUSH string "enableFeeAmount2";
+                 PUSH string "INVALID_CONDITION";
+                 PAIR;
+                 FAILWITH }
+               {  };
+             PUSH int 16384;
+             DUP 2;
+             COMPARE;
+             LT;
+             NOT;
+             IF
+               { PUSH string "enableFeeAmount3";
+                 PUSH string "INVALID_CONDITION";
+                 PAIR;
+                 FAILWITH }
+               {  };
+             DUP 4;
+             DUP 3;
+             GET;
+             IF_NONE
+               { NONE int }
+               { DUP;
+                 SOME;
+                 SWAP;
+                 DROP };
+             IF_NONE
+               { PUSH bool True }
+               { PUSH bool False;
+                 SWAP;
+                 DROP };
+             NOT;
+             IF
+               { PUSH string "enableFeeAmount4";
+                 PUSH string "INVALID_CONDITION";
+                 PAIR;
+                 FAILWITH }
+               {  };
+             DUP 4;
+             DUP 3;
+             MEM;
+             IF
+               { DUP 4;
+                 DUP 2;
+                 SOME;
+                 DUP 4;
+                 UPDATE;
+                 DIP { DIG 3; DROP };
+                 DUG 3 }
+               { DUP 4;
+                 DUP 2;
+                 SOME;
+                 DUP 4;
+                 UPDATE;
+                 DIP { DIG 3; DROP };
+                 DUG 3 };
+             NIL operation;
+             NIL operation;
+             DUP 8;
+             ITER { CONS };
+             DUP 3;
+             DUP 5;
+             PAIR;
+             EMIT %FeeAmountEnabled (pair (nat %fee) (int %tickSpacing));
+             CONS;
+             ITER { CONS };
+             DIP { DIG 5; DROP };
+             DUG 5;
+             DROP 2;
+             PAIR 3;
+             DIG 1;
+             PAIR };
+         DIP { DROP 2 } };
+  view
+    "getOwner"
+    unit
+    address
+    { CDR;
+      UNPAIR;
+      SWAP;
+      DROP;
+      UNIT;
+      DUP 2;
+      SWAP;
+      DROP;
+      DIP { DROP } }
+}
+
