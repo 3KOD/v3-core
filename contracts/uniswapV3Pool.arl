@@ -1629,17 +1629,17 @@ entry mint(
     end;
 
     // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
-    var tokensOwed0 = (feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
-    var tokensOwed1 = (feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
+    var tokensOwed0: nat ?= int_to_nat((feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_NAT;
+    var tokensOwed1: nat ?= int_to_nat((feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_NAT;
 
     // update the position
     if (amount_mint <> 0) then position.liquidity_PosInfo := liquidityNext;
     position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
     position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
-    if (tokensOwed0 > 0 or tokensOwed1 > 0) then begin
+    if ((tokensOwed0 > 0) or (tokensOwed1 > 0)) then begin
         // overflow is acceptable, have to withdraw before you hit type(uint128).max fees
         position.tokensOwed0_PosInfo += tokensOwed0;
-        position.tokensOwed1_PosInfo += tokensOwed1;
+        position.tokensOwed1_PosInfo += tokensOwed1
     end;
     // }
 
@@ -1776,7 +1776,7 @@ entry mint(
 
     emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat});
     slot0.unlocked := true
-}   
+}
 
 /// @inheritdoc IUniswapV3PoolActions
 entry collect(
@@ -1855,7 +1855,6 @@ entry burn(
     //     amount_burn,
     //     slot0_.tick
     // );
-    
 
     /// @dev Gets and updates a position with the given liquidity delta
     /// @param owner the owner of the position
@@ -2015,7 +2014,7 @@ entry burn(
                 tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_NAT
             else
                 tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
-        end;
+        end
     end;
 
     const retVal_getFeeGrowthInside: (nat * nat) = getFeeGrowthInside(
@@ -2052,17 +2051,17 @@ entry burn(
     end;
 
     // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
-    var tokensOwed0 = (feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
-    var tokensOwed1 = (feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128;
+    var tokensOwed0: nat ?= int_to_nat((feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_NAT;
+    var tokensOwed1: nat ?= int_to_nat((feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_NAT;
 
     // update the position
     if (amount_burn <> 0) then position.liquidity_PosInfo := liquidityNext;
     position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
     position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
-    if (tokensOwed0 > 0 or tokensOwed1 > 0) then begin
+    if ((tokensOwed0 > 0) or (tokensOwed1 > 0)) then begin
         // overflow is acceptable, have to withdraw before you hit type(uint128).max fees
         position.tokensOwed0_PosInfo += tokensOwed0;
-        position.tokensOwed1_PosInfo += tokensOwed1;
+        position.tokensOwed1_PosInfo += tokensOwed1
     end;
     // }
 
