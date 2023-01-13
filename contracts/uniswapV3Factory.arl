@@ -86,16 +86,16 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
 
         const storage_init : 
         (
-            address * address * address * nat * int * nat * 
+            address * address * address * nat * int * nat * nat * nat * 
             (nat * int * nat * nat * nat * nat * bool) * 
             nat * nat * 
             (nat * nat) * nat * 
             (big_map<int, (nat * int * nat * nat * int * nat * nat * bool)>) * 
             (big_map<int, nat>) * 
             (big_map<bytes, (nat * (nat * nat) * nat * nat)>) * 
-            (list<nat * int * nat * bool>)
+            (big_map<nat, (nat * int * nat * bool)>)
         ) = 
-            (self_address, token0_cp, token1_cp, fee_, tickSpacing_cp, maxLiquidityPerTick, slot0, 0, 0, (0, 0), 0, [], [], [], []);
+            (self_address, token0_cp, token1_cp, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
         const op_addr : (operation * address) = create_contract(uniswapV3Pool, none, amount, storage_init);
         operations := [op_addr[0]];
 
