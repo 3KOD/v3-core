@@ -107,7 +107,7 @@ event Flash {
     paid1_flash_event: nat;
 }
 
-event IncreaseObservationCardinalityNext{
+event IncObsCardinalityNext{
     observationCardinalityNextOld_event: nat;
     observationCardinalityNextNew_event: nat;
 }
@@ -371,9 +371,8 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
         tickCumulativeInside := tickCumulativeLower - tickCumulativeUpper;
         secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128) : INVALID_NAT;
         secondsInside ?:= int_to_nat(secondsOutsideLower - secondsOutsideUpper) : INVALID_NAT;
-        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside));
-    end;
-    if (slot0_.tick < tickUpper) then begin
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end else if (slot0_.tick < tickUpper) then begin
         var time ?= call_view<nat>(self_address, "blockTimestamp_", Unit) : INVALID_NAT;
         const retVal ?= call_view<int * nat>(self_address, "observationsObserveSingle_view", (
             time,
@@ -389,11 +388,12 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
         secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityCumulativeX128 - secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128) : INVALID_NAT;
         secondsInside ?:= int_to_nat(time - secondsOutsideLower - secondsOutsideUpper) : INVALID_NAT;
         return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
-    end;
-    tickCumulativeInside := tickCumulativeUpper - tickCumulativeLower;
-    secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideUpperX128 - secondsPerLiquidityOutsideLowerX128) : INVALID_NAT;
-    secondsInside ?:= int_to_nat(secondsOutsideUpper - secondsOutsideLower) : INVALID_NAT;
-    return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end else begin
+        tickCumulativeInside := tickCumulativeUpper - tickCumulativeLower;
+        secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideUpperX128 - secondsPerLiquidityOutsideLowerX128) : INVALID_NAT;
+        secondsInside ?:= int_to_nat(secondsOutsideUpper - secondsOutsideLower) : INVALID_NAT;
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end
 }
 
 /// @inheritdoc IUniswapV3PoolDerivedState
@@ -451,8 +451,9 @@ view observe(secondsAgos: list<nat>)
         tickCumulatives := concat(tickCumulatives, [retVal[0]]);
         secondsPerLiquidityCumulativeX128s := concat(secondsPerLiquidityCumulativeX128s, [retVal[1]]);
         i += 1
-    done
+    done;
     // }
+    return ((tickCumulatives, secondsPerLiquidityCumulativeX128s))
 }
 
 /// @inheritdoc IUniswapV3PoolActions
@@ -505,7 +506,7 @@ entry increaseObservationCardinalityNext(observationCardinalityNext_param: nat)
 
         slot0.observationCardinalityNext := observationCardinalityNextNew;
         if (observationCardinalityNextOld <> observationCardinalityNextNew) then
-            emit<IncreaseObservationCardinalityNext>({observationCardinalityNextOld; observationCardinalityNextNew});
+            emit<IncObsCardinalityNext>({observationCardinalityNextOld; observationCardinalityNextNew});
         slot0.unlocked := true
     }
 }
@@ -902,13 +903,13 @@ view lte_tickBmpNITWOW_view(
     if (a <= time and b <= time) then begin
         retVal := a <= b;
         return retVal
-    end;
+    end else begin
+        const aAdjusted = a > time ? a : a + 1 <<| 32;
+        const bAdjusted = b > time ? b : b + 1 <<| 32;
 
-    const aAdjusted = a > time ? a : a + 1 <<| 32;
-    const bAdjusted = b > time ? b : b + 1 <<| 32;
-
-    retVal := aAdjusted <= bAdjusted;
-    return retVal
+        retVal := aAdjusted <= bAdjusted;
+        return retVal
+    end
 }
 
 /// @notice comparator for 32-bit timestamps
@@ -927,13 +928,13 @@ function lte_tickBmpNITWOW(
     if (a <= time and b <= time) then begin
         retVal := a <= b;
         return retVal
-    end;
+    end else begin
+        const aAdjusted = a > time ? a : a + 1 <<| 32;
+        const bAdjusted = b > time ? b : b + 1 <<| 32;
 
-    const aAdjusted = a > time ? a : a + 1 <<| 32;
-    const bAdjusted = b > time ? b : b + 1 <<| 32;
-
-    retVal := aAdjusted <= bAdjusted;
-    return retVal
+        retVal := aAdjusted <= bAdjusted;
+        return retVal
+    end
 }
 
 /// @notice Fetches the observations beforeOrAt and atOrAfter a target, i.e. where [beforeOrAt, atOrAfter] is satisfied.
@@ -958,7 +959,8 @@ view binarySearch_view(
     var beforeOrAt: Observation = {0; 0; 0; false};
     var atOrAfter: Observation = {0; 0; 0; false};
     var i = 0;
-    while true do 
+    var condWhile = true;
+    while condWhile do 
         i ?:= int_to_nat((l + r) div 2) : INVALID_NAT;
 
         beforeOrAt := observations[i % cardinality_binarySearch].observation_value;
@@ -974,12 +976,13 @@ view binarySearch_view(
             const cond_Val ?= call_view<bool>(self_address, "lte_tickBmpNITWOW_view", (time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) : INVALID_RECORD;
             // check if we've found the answer!
             if (targetAtOrAfter and cond_Val) then
-                return ((beforeOrAt, atOrAfter));
+                condWhile := false;
 
             if (targetAtOrAfter = false) then r := i - 1
             else l := i + 1
         end;
-    done
+    done;
+    return ((beforeOrAt, atOrAfter))
 }
 
 /// @notice Fetches the observations beforeOrAt and atOrAfter a target, i.e. where [beforeOrAt, atOrAfter] is satisfied.
@@ -1004,7 +1007,8 @@ function binarySearch(
     var beforeOrAt: Observation = {0; 0; 0; false};
     var atOrAfter: Observation = {0; 0; 0; false};
     var i = 0;
-    while true do 
+    var condWhile = true;
+    while condWhile do 
         i ?:= int_to_nat((l + r) div 2) : INVALID_NAT;
 
         beforeOrAt := observations[i % cardinality_binarySearch].observation_value;
@@ -1019,12 +1023,13 @@ function binarySearch(
 
             // check if we've found the answer!
             if (targetAtOrAfter and lte_tickBmpNITWOW(time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) then
-                return ((beforeOrAt, atOrAfter));
+                condWhile := false;
 
             if (targetAtOrAfter = false) then r := i - 1
             else l := i + 1
-        end;
-    done
+        end
+    done;
+    return ((beforeOrAt, atOrAfter))
 }
 
 view transform_view(
@@ -1093,19 +1098,19 @@ view getSurroundingObservations_view(
                 (beforeOrAt, target_getSurroundingObservations, tick_getSurroundingObservations, liquidity_getSurroundingObservations)) : INVALID_RECORD;
             return ((beforeOrAt, retVal))
         end
-    end;
+    end else begin
+        // now, set before to the oldest observation
+        beforeOrAt := observations[(index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations].observation_value;
+        if (beforeOrAt.initialized_Obs = false) then beforeOrAt := observations[0].observation_value;
 
-    // now, set before to the oldest observation
-    beforeOrAt := observations[(index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations].observation_value;
-    if (beforeOrAt.initialized_Obs = false) then beforeOrAt := observations[0].observation_value;
+        // ensure that the target is chronologically at or after the oldest observation
+        do_require(call_view<bool>(self_address, "lte_tickBmpNITWOW_view", (time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations)) ? the : false, "OLD");
 
-    // ensure that the target is chronologically at or after the oldest observation
-    do_require(call_view<bool>(self_address, "lte_tickBmpNITWOW_view", (time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations)) ? the : false, "OLD");
-
-    // if we've reached this point, we have to binary search
-    const retVal_binarySearch ?= call_view<Observation * Observation>(self_address, "binarySearch_view", 
-        (time_getSurroundingObservations, target_getSurroundingObservations, index_getSurroundingObservations, cardinality_getSurroundingObservations)) : INVALID_RECORD;
-    return retVal_binarySearch
+        // if we've reached this point, we have to binary search
+        const retVal_binarySearch ?= call_view<Observation * Observation>(self_address, "binarySearch_view", 
+            (time_getSurroundingObservations, target_getSurroundingObservations, index_getSurroundingObservations, cardinality_getSurroundingObservations)) : INVALID_RECORD;
+        return retVal_binarySearch
+    end
 }
 
 function getSurroundingObservations(
@@ -1128,17 +1133,17 @@ function getSurroundingObservations(
         else
             // otherwise, we need to transform
             return ((beforeOrAt, transform(beforeOrAt, target_getSurroundingObservations, tick_getSurroundingObservations, liquidity_getSurroundingObservations)))
-    end;
+    end else begin
+        // now, set before to the oldest observation
+        beforeOrAt := observations[(index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations].observation_value;
+        if (beforeOrAt.initialized_Obs = false) then beforeOrAt := observations[0].observation_value;
 
-    // now, set before to the oldest observation
-    beforeOrAt := observations[(index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations].observation_value;
-    if (beforeOrAt.initialized_Obs = false) then beforeOrAt := observations[0].observation_value;
+        // ensure that the target is chronologically at or after the oldest observation
+        do_require(lte_tickBmpNITWOW(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations), "OLD");
 
-    // ensure that the target is chronologically at or after the oldest observation
-    do_require(lte_tickBmpNITWOW(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations), "OLD");
-
-    // if we've reached this point, we have to binary search
-    return binarySearch(time_getSurroundingObservations, target_getSurroundingObservations, index_getSurroundingObservations, cardinality_getSurroundingObservations)
+        // if we've reached this point, we have to binary search
+        return binarySearch(time_getSurroundingObservations, target_getSurroundingObservations, index_getSurroundingObservations, cardinality_getSurroundingObservations)
+    end
 }
 
 view observationsObserveSingle_view(
@@ -1156,36 +1161,38 @@ view observationsObserveSingle_view(
         const val1 = last.tickCumulative_Obs;
         const val2 = last.secondsPerLiquidityCumulativeX128_Obs;
         return ((val1, val2))
-    end;
+    end else begin
+        var target ?= int_to_nat(time_observeSingle - secondsAgo_observeSingle) : INVALID_NAT;
 
-    var target ?= int_to_nat(time_observeSingle - secondsAgo_observeSingle) : INVALID_NAT;
+        const retVal ?= call_view<Observation * Observation>(self_address, "getSurroundingObservations_view", (
+            time_observeSingle,
+            target,
+            tick_observeSingle,
+            index_observeSingle,
+            liquidity_observeSingle,
+            cardinality_observeSingle
+        )) : INVALID_RECORD;
+        const beforeOrAt = retVal[0];
+        const atOrAfter = retVal[1];
 
-    const retVal ?= call_view<Observation * Observation>(self_address, "getSurroundingObservations_view", (
-        time_observeSingle,
-        target,
-        tick_observeSingle,
-        index_observeSingle,
-        liquidity_observeSingle,
-        cardinality_observeSingle
-    )) : INVALID_RECORD;
-    const beforeOrAt = retVal[0];
-    const atOrAfter = retVal[1];
-
-    if (target = beforeOrAt.blockTimestamp_Obs) then 
-        // we're at the left boundary
-        return ((beforeOrAt.tickCumulative_Obs, beforeOrAt.secondsPerLiquidityCumulativeX128_Obs));
-    if (target = atOrAfter.blockTimestamp_Obs) then
-        // we're at the right boundary
-        return ((atOrAfter.tickCumulative_Obs, atOrAfter.secondsPerLiquidityCumulativeX128_Obs));
-    // we're in the middle
-    const observationTimeDelta = atOrAfter.blockTimestamp_Obs - beforeOrAt.blockTimestamp_Obs;
-    const targetDelta = target - beforeOrAt.blockTimestamp_Obs;
-    const retVal1 = beforeOrAt.tickCumulative_Obs + ((atOrAfter.tickCumulative_Obs - beforeOrAt.tickCumulative_Obs) div observationTimeDelta) * targetDelta;
-    const retVal2_int = 
-        beforeOrAt.secondsPerLiquidityCumulativeX128_Obs + 
-        (atOrAfter.secondsPerLiquidityCumulativeX128_Obs - beforeOrAt.secondsPerLiquidityCumulativeX128_Obs) * targetDelta div observationTimeDelta;
-    const retVal2 ?= int_to_nat(retVal2_int) : INVALID_NAT;
-    return ((retVal1, retVal2))
+        if (target = beforeOrAt.blockTimestamp_Obs) then 
+            // we're at the left boundary
+            return ((beforeOrAt.tickCumulative_Obs, beforeOrAt.secondsPerLiquidityCumulativeX128_Obs))
+        else if (target = atOrAfter.blockTimestamp_Obs) then
+            // we're at the right boundary
+            return ((atOrAfter.tickCumulative_Obs, atOrAfter.secondsPerLiquidityCumulativeX128_Obs))
+        else begin
+            // we're in the middle
+            const observationTimeDelta = atOrAfter.blockTimestamp_Obs - beforeOrAt.blockTimestamp_Obs;
+            const targetDelta = target - beforeOrAt.blockTimestamp_Obs;
+            const retVal1 = beforeOrAt.tickCumulative_Obs + ((atOrAfter.tickCumulative_Obs - beforeOrAt.tickCumulative_Obs) div observationTimeDelta) * targetDelta;
+            const retVal2_int = 
+                beforeOrAt.secondsPerLiquidityCumulativeX128_Obs + 
+                (atOrAfter.secondsPerLiquidityCumulativeX128_Obs - beforeOrAt.secondsPerLiquidityCumulativeX128_Obs) * targetDelta div observationTimeDelta;
+            const retVal2 ?= int_to_nat(retVal2_int) : INVALID_NAT;
+            return ((retVal1, retVal2))
+        end
+    end
 }
 
 function observationsObserveSingle(
@@ -1203,36 +1210,39 @@ function observationsObserveSingle(
         const val1 = last.tickCumulative_Obs;
         const val2 = last.secondsPerLiquidityCumulativeX128_Obs;
         return ((val1, val2))
-    end;
+    end else begin
 
-    var target ?= int_to_nat(time_observeSingle - secondsAgo_observeSingle) : INVALID_NAT;
+        var target ?= int_to_nat(time_observeSingle - secondsAgo_observeSingle) : INVALID_NAT;
 
-    const retVal = getSurroundingObservations(
-        time_observeSingle,
-        target,
-        tick_observeSingle,
-        index_observeSingle,
-        liquidity_observeSingle,
-        cardinality_observeSingle
-    );
-    const beforeOrAt = retVal[0];
-    const atOrAfter = retVal[1];
+        const retVal = getSurroundingObservations(
+            time_observeSingle,
+            target,
+            tick_observeSingle,
+            index_observeSingle,
+            liquidity_observeSingle,
+            cardinality_observeSingle
+        );
+        const beforeOrAt = retVal[0];
+        const atOrAfter = retVal[1];
 
-    if (target = beforeOrAt.blockTimestamp_Obs) then 
-        // we're at the left boundary
-        return ((beforeOrAt.tickCumulative_Obs, beforeOrAt.secondsPerLiquidityCumulativeX128_Obs));
-    if (target = atOrAfter.blockTimestamp_Obs) then
-        // we're at the right boundary
-        return ((atOrAfter.tickCumulative_Obs, atOrAfter.secondsPerLiquidityCumulativeX128_Obs));
-    // we're in the middle
-    const observationTimeDelta = atOrAfter.blockTimestamp_Obs - beforeOrAt.blockTimestamp_Obs;
-    const targetDelta = target - beforeOrAt.blockTimestamp_Obs;
-    const retVal1 = beforeOrAt.tickCumulative_Obs + ((atOrAfter.tickCumulative_Obs - beforeOrAt.tickCumulative_Obs) div observationTimeDelta) * targetDelta;
-    const retVal2_int = 
-        beforeOrAt.secondsPerLiquidityCumulativeX128_Obs + 
-        (atOrAfter.secondsPerLiquidityCumulativeX128_Obs - beforeOrAt.secondsPerLiquidityCumulativeX128_Obs) * targetDelta div observationTimeDelta;
-    const retVal2 ?= int_to_nat(retVal2_int) : INVALID_NAT;
-    return ((retVal1, retVal2))
+        if (target = beforeOrAt.blockTimestamp_Obs) then 
+            // we're at the left boundary
+            return ((beforeOrAt.tickCumulative_Obs, beforeOrAt.secondsPerLiquidityCumulativeX128_Obs))
+        else if (target = atOrAfter.blockTimestamp_Obs) then
+            // we're at the right boundary
+            return ((atOrAfter.tickCumulative_Obs, atOrAfter.secondsPerLiquidityCumulativeX128_Obs))
+        else begin
+            // we're in the middle
+            const observationTimeDelta = atOrAfter.blockTimestamp_Obs - beforeOrAt.blockTimestamp_Obs;
+            const targetDelta = target - beforeOrAt.blockTimestamp_Obs;
+            const retVal1 = beforeOrAt.tickCumulative_Obs + ((atOrAfter.tickCumulative_Obs - beforeOrAt.tickCumulative_Obs) div observationTimeDelta) * targetDelta;
+            const retVal2_int = 
+                beforeOrAt.secondsPerLiquidityCumulativeX128_Obs + 
+                (atOrAfter.secondsPerLiquidityCumulativeX128_Obs - beforeOrAt.secondsPerLiquidityCumulativeX128_Obs) * targetDelta div observationTimeDelta;
+            const retVal2 ?= int_to_nat(retVal2_int) : INVALID_NAT;
+            return ((retVal1, retVal2))
+        end
+    end
 }
 
 // /// @notice Computes the position in the mapping where the initialized bit for a tick lives
@@ -1321,9 +1331,9 @@ function sqrtPriceMathGetAmount0Delta_round(
         const val1 ?= int_to_nat(ceil(numerator1 * numerator2 / sqrtRatioBX96_val)) : INVALID_NAT;
         const val2 ?= int_to_nat(ceil(val1 / sqrtRatioAX96_val)) : INVALID_NAT;
         return val2
-    end;
-    const retVal = numerator1 * numerator2 div sqrtRatioBX96_val div sqrtRatioAX96_val;
-    return retVal
+    end else begin
+        return (numerator1 * numerator2 div sqrtRatioBX96_val div sqrtRatioAX96_val);
+    end
 }
 
 /// @notice Helper that gets signed token0 delta
@@ -1336,11 +1346,10 @@ function sqrtPriceMathGetAmount0Delta(
     sqrtRatioBX96_sPMGA0D: nat,
     liquidity_sPMGA0D: int
 ) : int {
-    if liquidity_sPMGA0D < 0 then begin
-        const retVal = -sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), false);
-        return retVal
-    end;
-    return sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), true)
+    if (liquidity_sPMGA0D < 0) then
+        return (-sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), false))
+    else
+        return (sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), true))
 }
 
 /// @notice Gets the amount1 delta between two prices
@@ -1366,10 +1375,11 @@ function sqrtPriceMathGetAmount1Delta_round(
     if roundUp_sPMGA1D then begin
         const val ?= int_to_nat((ceil(liquidity_sPMGA1D * (sqrtRatioBX96_val - sqrtRatioAX96_val) / Q96))) : INVALID_NAT;
         return val
-    end;
-    var retVal ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_NAT;
-    retVal := liquidity_sPMGA1D * retVal div Q96;
-    return retVal
+    end else begin
+        var retVal ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_NAT;
+        retVal := liquidity_sPMGA1D * retVal div Q96;
+        return retVal
+    end
 }
 
 /// @notice Helper that gets signed token1 delta
@@ -1382,11 +1392,10 @@ function sqrtPriceMathGetAmount1Delta(
     sqrtRatioBX96_sPMGA1D: nat,
     liquidity_sPMGA1D: int
 ) : int {
-    if liquidity_sPMGA1D < 0 then begin
-        const retVal = -sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), false);
-        return retVal
-    end;
-    return sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), true)
+    if liquidity_sPMGA1D < 0 then
+        return (-sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), false))
+    else
+        return (sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), true))
 }
 
 /// @inheritdoc IUniswapV3PoolActions
@@ -1432,7 +1441,6 @@ entry mint(
     //     amount_mint,
     //     slot0_.tick
     // );
-    
 
     /// @dev Gets and updates a position with the given liquidity delta
     /// @param owner the owner of the position
