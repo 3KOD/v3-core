@@ -2404,28 +2404,29 @@ function sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(
 ) : nat {
     // we short circuit amount == 0 because the result is otherwise not guaranteed to equal the input price
     if (amount_sqrtPMGNSPFromA0RU = 0) then 
-        return sqrtPX96_sqrtPMGNSPFromA0RU;
-    var numerator1: nat = liquidity_sqrtPMGNSPFromA0RU <<| RESOLUTION;
+        return sqrtPX96_sqrtPMGNSPFromA0RU
+    else begin
+        var numerator1: nat = liquidity_sqrtPMGNSPFromA0RU <<| RESOLUTION;
 
-    if (add_sqrtPMGNSPFromA0RU) then begin
-        var product: nat = 0;
-        product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
-        if ((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) then begin
-            const denominator: nat = numerator1 + product;
-            if (denominator >= numerator1) then
-                // always fits in 160 bits
-                return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
-        end;
-
-        return abs(ceil(numerator1 / (numerator1 div sqrtPX96_sqrtPMGNSPFromA0RU) + amount_sqrtPMGNSPFromA0RU))
-    end else begin
-        var product: nat = 0;
-        product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
-        // if the product overflows, we know the denominator underflows
-        // in addition, we must check that the denominator does not underflow
-        do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), "ERR");
-        const denominator: nat ?= int_to_nat(numerator1 - product) : INVALID_NAT;
-        return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
+        if (add_sqrtPMGNSPFromA0RU) then begin
+            var product: nat = 0;
+            product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
+            if ((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) then begin
+                const denominator: nat = numerator1 + product;
+                if (denominator >= numerator1) then
+                    // always fits in 160 bits
+                    return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
+                else return abs(ceil(numerator1 / (numerator1 div sqrtPX96_sqrtPMGNSPFromA0RU) + amount_sqrtPMGNSPFromA0RU))
+            end else return abs(ceil(numerator1 / (numerator1 div sqrtPX96_sqrtPMGNSPFromA0RU) + amount_sqrtPMGNSPFromA0RU))
+        end else begin
+            var product: nat = 0;
+            product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
+            // if the product overflows, we know the denominator underflows
+            // in addition, we must check that the denominator does not underflow
+            do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), "ERR");
+            const denominator: nat ?= int_to_nat(numerator1 - product) : INVALID_NAT;
+            return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
+        end
     end
 }
 
@@ -2661,7 +2662,7 @@ entry swap(
         };
 
         // continue swapping as long as we haven't used the entire input/output and haven't reached the price limit
-        while (state_swap_param.amountSpecifiedRemaining_swapState <> 0 and state_swap_param.sqrtPriceX96_swapState <> sqrtPriceLimitX96) do
+        while ((state_swap_param.amountSpecifiedRemaining_swapState <> 0) and (state_swap_param.sqrtPriceX96_swapState <> sqrtPriceLimitX96)) do
             // memory is not storage
             var step: StepComputations = {0; 0; false; 0; 0; 0; 0};
 
@@ -2681,7 +2682,7 @@ entry swap(
                 step.tickNext_stepComputations := MIN_TICK
             else begin
                 if (step.tickNext_stepComputations > MAX_TICK) then
-                    step.tickNext_stepComputations := MAX_TICK;
+                    step.tickNext_stepComputations := MAX_TICK
             end;
 
             // get the price for the next tick
@@ -2900,14 +2901,14 @@ entry swap(
         if zeroForOne then begin
             if (amount1 < 0) then begin
                 // TransferHelper.safeTransfer(token1, recipient, uint256(-amount1));
-                balance1 -= abs(amount1);
+                balance1 ?:= int_to_nat(balance1 - abs(amount1)) : INVALID_NAT;
                 transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, abs(amount1)))
             end;
 
             // uint256 balance0Before = balance0();
             var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_UNPACK;
             const amount0_nat ?= int_to_nat(amount0) : INVALID_NAT;
-            balance0 += amount0;
+            balance0 ?:= int_to_nat(balance0 + amount0) : INVALID_NAT;
             transfer 0tz to token0 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount0_nat));
             // should be remove token transfer part
             // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
@@ -2917,14 +2918,14 @@ entry swap(
         end else begin
             if (amount0 < 0) then begin
                 // TransferHelper.safeTransfer(token0, recipient, uint256(-amount0));
-                balance0 -= abs(amount0);
-                transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)));
+                balance0 ?:= int_to_nat(balance0 - abs(amount0)) : INVALID_NAT;
+                transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)))
             end;
 
             // uint256 balance1Before = balance1();
             var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_UNPACK;
             const amount1_nat ?= int_to_nat(amount1) : INVALID_NAT;
-            balance0 += amount1;
+            balance0 ?:= int_to_nat(balance0 + amount1) : INVALID_NAT;
             transfer 0tz to token1 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount1_nat));
             // should be remove token transfer part
             // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
