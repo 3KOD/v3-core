@@ -291,7 +291,14 @@ function checkTicks(tickLower: int, tickUpper: int): bool {
 }
 
 /// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
-view blockTimestamp_(): nat {
+view blockTimestamp_view(): nat {
+    const timestamp ?= int_to_nat((now - UnixStartTime) div 1s) : INVALID_NAT;
+    return timestamp
+    // return uint32(block.timestamp); // truncation is desired
+}
+
+/// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
+function blockTimestamp_(): nat {
     const timestamp ?= int_to_nat((now - UnixStartTime) div 1s) : INVALID_NAT;
     return timestamp
     // return uint32(block.timestamp); // truncation is desired
@@ -490,7 +497,10 @@ entry increaseObservationCardinalityNext(observationCardinalityNext_param: nat)
             // for (uint16 i = observationCardinalityNextOld; i < observationCardinalityNext_param; i++) observations[i].blockTimestamp_Obs := 1;
             var i = observationCardinalityNextOld;
             while (i < observationCardinalityNext_param) do
-                observations[i].observation_value.blockTimestamp_Obs := 1;
+                observations[i].observation_value := {
+                    observations[i].observation_value with
+                    blockTimestamp_Obs = 1
+                };
                 i += 1
             done;
             observationCardinalityNextNew := observationCardinalityNext_param;
@@ -2762,11 +2772,20 @@ entry swap(
                     const tickCumulative_param: int = cache.tickCumulative_swapCache;
                     const time_param: nat = cache.blockTimestamp_swapCache;
 
-                    ticks[tick_param].info.feeGrowthOutside0X128 ?:= int_to_nat(feeGrowthGlobal0X128_param - ticks[tick_param].info.feeGrowthOutside0X128) : INVALID_NAT;
-                    ticks[tick_param].info.feeGrowthOutside1X128 ?:= int_to_nat(feeGrowthGlobal1X128_param - ticks[tick_param].info.feeGrowthOutside1X128) : INVALID_NAT;
-                    ticks[tick_param].info.secondsPerLiquidityOutsideX128 ?:= int_to_nat(secondsPerLiquidityCumulativeX128_param - ticks[tick_param].info.secondsPerLiquidityOutsideX128) : INVALID_NAT;
-                    ticks[tick_param].info.tickCumulativeOutside := tickCumulative_param - ticks[tick_param].info.tickCumulativeOutside;
-                    ticks[tick_param].info.secondsOutside ?:= int_to_nat(time_param - ticks[tick_param].info.secondsOutside) : INVALID_NAT;
+                    const feeGrowthOutside0X128_param ?= int_to_nat(feeGrowthGlobal0X128_param - ticks[tick_param].info.feeGrowthOutside0X128) : INVALID_NAT;
+                    const feeGrowthOutside1X128_param ?= int_to_nat(feeGrowthGlobal1X128_param - ticks[tick_param].info.feeGrowthOutside1X128) : INVALID_NAT;
+                    const secondsPerLiquidityOutsideX128_param ?= int_to_nat(secondsPerLiquidityCumulativeX128_param - ticks[tick_param].info.secondsPerLiquidityOutsideX128) : INVALID_NAT;
+                    const tickCumulativeOutside_param = tickCumulative_param - ticks[tick_param].info.tickCumulativeOutside;
+                    const secondsOutside_param ?= int_to_nat(time_param - ticks[tick_param].info.secondsOutside) : INVALID_NAT;
+
+                    ticks[tick_param].info := {
+                        ticks[tick_param].info with 
+                        feeGrowthOutside0X128 = feeGrowthOutside0X128_param;
+                        feeGrowthOutside1X128 = feeGrowthOutside1X128_param;
+                        secondsPerLiquidityOutsideX128 = secondsPerLiquidityOutsideX128_param;
+                        tickCumulativeOutside = tickCumulativeOutside_param;
+                        secondsOutside = secondsOutside_param
+                    };
                     
                     var liquidityNet_param: int = ticks[tick_param].info.liquidityNet;
                     // }
