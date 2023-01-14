@@ -1,4 +1,4 @@
 
-archetype IUniswapV3SwapCallback
+archetype IkodexV3SwapCallback
 
-entry uniswapV3SwapCallback(amount0Delta: int, amount1Delta: int, data: bytes);
+entry kodexV3SwapCallback(amount0Delta: int, amount1Delta: int, data: bytes);

@@ -1,5 +1,5 @@
 
-archetype IUniswapV3PoolState
+archetype IkodexV3PoolState
 
 view slot0(): <nat, int, nat, nat, nat, nat, bool> {};
 view feeGrowthGlobal0X128(): nat;

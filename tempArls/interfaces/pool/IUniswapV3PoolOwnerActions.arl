@@ -1,5 +1,5 @@
 
-archetype IUniswapV3PoolOwnerActions
+archetype IkodexV3PoolOwnerActions
 
 entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) {}
 getter collectProtocol(

@@ -1,4 +1,4 @@
-archetype IUniswapV3PoolActions
+archetype IkodexV3PoolActions
 
 entry initialize(sqrtPriceX96: nat) {}
 

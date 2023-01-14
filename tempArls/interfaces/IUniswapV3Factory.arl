@@ -1,5 +1,5 @@
 
-archetype UniswapV3Factory
+archetype kodexV3Factory
 
 event OwnerChanged {
     oldOwner: address;

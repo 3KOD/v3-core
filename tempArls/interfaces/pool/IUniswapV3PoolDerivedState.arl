@@ -1,4 +1,4 @@
-archetype IUniswapV3PoolDerivedState
+archetype IkodexV3PoolDerivedState
     
 view observe(
     secondsAgos: nat[]

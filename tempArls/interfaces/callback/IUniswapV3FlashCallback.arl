@@ -1,4 +1,4 @@
 
-archetype IUniswapV3FlashCallback
+archetype IkodexV3FlashCallback
 
-entry uniswapV3FlashCallback(fee0: nat, fee1: nat, data: bytes) {};
+entry kodexV3FlashCallback(fee0: nat, fee1: nat, data: bytes) {};

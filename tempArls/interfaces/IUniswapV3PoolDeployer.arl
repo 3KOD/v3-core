@@ -1,4 +1,4 @@
-archetype IUniswapV3PoolDeployer
+archetype IkodexV3PoolDeployer
 
 record Parameters {
     factory : address;

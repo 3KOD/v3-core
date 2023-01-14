@@ -1,7 +1,7 @@
 // owner = caller
-archetype uniswapV3Factory(owner: address)
+archetype kodexV3Factory(owner: address)
 
-import uniswapV3Pool from "./contracts/michelson/uniswapV3Pool.tz"
+import kodexV3Pool from "./contracts/michelson/kodexV3Pool.tz"
 
 constant TickMathMIN_TICK: int = -887272
 constant TickMathMAX_TICK: int = -TickMathMIN_TICK
@@ -26,7 +26,7 @@ event FeeAmountEnabled {
     tickSpacing: int
 }
 
-/// @inheritdoc IUniswapV3Factory
+/// @inheritdoc IkodexV3Factory
 asset feeAmountTickSpacing identified by fee to big_map {
     fee : nat;
     tickSpacing : int = 0;
@@ -96,7 +96,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
             (big_map<nat, (nat * int * nat * bool)>)
         ) = 
             (self_address, token0_cp, token1_cp, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
-        const op_addr : (operation * address) = create_contract(uniswapV3Pool, none, amount, storage_init);
+        const op_addr : (operation * address) = create_contract(kodexV3Pool, none, amount, storage_init);
         operations := [op_addr[0]];
 
         getPool[(token0_cp, token1_cp, fee_)].pool := op_addr[1];

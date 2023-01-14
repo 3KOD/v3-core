@@ -1,9 +1,9 @@
-archetype IUniswapV3Pool
+archetype IkodexV3Pool
 
-import IUniswapV3PoolImmutables from "./pool/IUniswapV3PoolImmutables.tz";
-import IUniswapV3PoolState from "./pool/IUniswapV3PoolState.tz";
-import IUniswapV3PoolDerivedState from "./pool/IUniswapV3PoolDerivedState.tz";
-import IUniswapV3PoolActions from "./pool/IUniswapV3PoolActions.tz";
-import IUniswapV3PoolOwnerActions from "./pool/IUniswapV3PoolOwnerActions.tz";
-import IUniswapV3PoolEvents from "./pool/IUniswapV3PoolEvents.tz";
+import IkodexV3PoolImmutables from "./pool/IkodexV3PoolImmutables.tz";
+import IkodexV3PoolState from "./pool/IkodexV3PoolState.tz";
+import IkodexV3PoolDerivedState from "./pool/IkodexV3PoolDerivedState.tz";
+import IkodexV3PoolActions from "./pool/IkodexV3PoolActions.tz";
+import IkodexV3PoolOwnerActions from "./pool/IkodexV3PoolOwnerActions.tz";
+import IkodexV3PoolEvents from "./pool/IkodexV3PoolEvents.tz";
 

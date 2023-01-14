@@ -1,4 +1,4 @@
-archetype uniswapV3Pool(factory: address, token0: address, token1: address)
+archetype kodexV3Pool(factory: address, token0: address, token1: address)
 
 // import LowGasSafeMath from "./libraries/LowGasSafeMath.tz"
 // import SafeCast from "./libraries/SafeCast.tz"
@@ -13,12 +13,12 @@ archetype uniswapV3Pool(factory: address, token0: address, token1: address)
 // import LiquidityMath from "./libraries/LiquidityMath.tz"
 // import SqrtPriceMath from "./libraries/SqrtPriceMath.tz"
 // import SwapMath from "./libraries/SwapMath.tz"
-// import IUniswapV3PoolDeployer from "./interfaces/IUniswapV3PoolDeployer.tz"
-// import IUniswapV3Factory from "./interfaces/IUniswapV3Factory.tz"
+// import IkodexV3PoolDeployer from "./interfaces/IkodexV3PoolDeployer.tz"
+// import IkodexV3Factory from "./interfaces/IkodexV3Factory.tz"
 // import IERC20Minimal from "./interfaces/IERC20Minimal.tz"
-// import IUniswapV3MintCallback from "./interfaces/callback/IUniswapV3MintCallback.tz"
-// import IUniswapV3SwapCallback from "./interfaces/callback/IUniswapV3SwapCallback.tz"
-// import IUniswapV3FlashCallback from "./interfaces/callback/IUniswapV3FlashCallback.tz"
+// import IkodexV3MintCallback from "./interfaces/callback/IkodexV3MintCallback.tz"
+// import IkodexV3SwapCallback from "./interfaces/callback/IkodexV3SwapCallback.tz"
+// import IkodexV3FlashCallback from "./interfaces/callback/IkodexV3FlashCallback.tz"
 
 constant INVALID_NAT             : string = "INVALID_NAT"
 constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
@@ -150,7 +150,7 @@ variable balance1: nat = 0
 // using Position for Position.Info;
 // using Oracle for Oracle.Observation[65535];
 
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 record Slot0 {
     // the current price
     sqrtPriceX96: nat;
@@ -179,9 +179,9 @@ variable slot0: Slot0 = {
     unlocked                    = false
 }
 
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 variable feeGrowthGlobal0X128 : nat = 0
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 variable feeGrowthGlobal1X128 : nat = 0
 
 // accumulated protocol fees in token0/token1 units
@@ -189,13 +189,13 @@ record ProtocolFees {
     token0_fees: nat;
     token1_fees: nat;
 } as ((token0, token1))
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 variable protocolFees: ProtocolFees = {
     token0_fees = 0;
     token1_fees = 0
 }
 
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 variable liquidity : nat = 0
 
 // info stored for each initialized individual tick
@@ -221,12 +221,12 @@ record TickInfo {
     %initialized: bool;
 }
 
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 asset ticks identified by tickId to big_map {
     tickId: int;
     info: TickInfo;
 }
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 asset tickBitmap identified by tick_tickBmp to big_map {
     tick_tickBmp : int;
     tickSpacing_tickBmp: nat = 0;
@@ -241,7 +241,7 @@ record PositionInfo {
     tokensOwed0_PosInfo: nat;
     tokensOwed1_PosInfo: nat;
 } as ((liquidity, (feeGrowthInside0LastX128, feeGrowthInside1LastX128), (tokensOwed0, tokensOwed1)))
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 asset positions identified by positionId_owner positionId_tickLower positionId_tickUpper to big_map {
     positionId_owner: address;
     positionId_tickLower: int;
@@ -258,7 +258,7 @@ record Observation {
     // whether or not the observation is initialized
     initialized_Obs: bool;
 } as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
-/// @inheritdoc IUniswapV3PoolState
+/// @inheritdoc IkodexV3PoolState
 // Oracle.Observation[65535] public override observations;
 asset observations identified by observation_key to big_map {
     observation_key: nat;
@@ -275,7 +275,7 @@ asset observations identified by observation_key to big_map {
 //     // slot0.unlocked := true;
 // }
 
-/// @dev Prevents calling a function from anyone except the address returned by IUniswapV3Factory#owner()
+/// @dev Prevents calling a function from anyone except the address returned by IkodexV3Factory#owner()
 function onlyFactoryOwner(): bool {
     const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : "VIEW_OWNER_ERR";
     do_require(caller = factoryOwner, "ONLY_FACTORY_OWNER_ERR");
@@ -328,7 +328,7 @@ function blockTimestamp_(): nat {
 //     return 0
 // }
 
-// / @inheritdoc IUniswapV3PoolDerivedState
+// / @inheritdoc IkodexV3PoolDerivedState
 view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
 // (
 //         /* tickCumulativeInside: */ int *
@@ -396,7 +396,7 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
     end
 }
 
-/// @inheritdoc IUniswapV3PoolDerivedState
+/// @inheritdoc IkodexV3PoolDerivedState
 view observe(secondsAgos: list<nat>)
     /* external
     view
@@ -456,7 +456,7 @@ view observe(secondsAgos: list<nat>)
     return ((tickCumulatives, secondsPerLiquidityCumulativeX128s))
 }
 
-/// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IkodexV3PoolActions
 entry increaseObservationCardinalityNext(observationCardinalityNext_param: nat)
     // external
     // override
@@ -693,7 +693,7 @@ function tickMathGetTickAtSqrtRatio(sqrtPriceX96_getTickAtSqrtRatio: nat) : int 
     return tick_val
 }
 
-/// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IkodexV3PoolActions
 /// @dev not locked because it initializes unlocked
 entry initialize(sqrtPriceX96_initialize: nat) /* external override */ {
     do_require(slot0.sqrtPriceX96 = 0, "AI");
@@ -1398,7 +1398,7 @@ function sqrtPriceMathGetAmount1Delta(
         return (sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), true))
 }
 
-/// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IkodexV3PoolActions
 /// @dev noDelegateCall is applied indirectly via _modifyPosition
 entry mint(
     /* address */ recipient_mint: address,
@@ -1756,7 +1756,7 @@ entry mint(
     // var balance1Before: nat = 0;
     // if (amount0_nat > 0) then balance0Before := balance0();
     // if (amount1_nat > 0) then balance1Before := balance1();
-    // IUniswapV3MintCallback(caller).uniswapV3MintCallback(amount0_nat, amount1_nat, data_mint);
+    // IkodexV3MintCallback(caller).kodexV3MintCallback(amount0_nat, amount1_nat, data_mint);
     // if (amount0_nat > 0) then do_require(balance0Before + amount0_nat <= balance0(), "M0");
     // if (amount1_nat > 0) then do_require(balance1Before + amount1_nat <= balance1(), "M1");
 
@@ -1778,7 +1778,7 @@ entry mint(
     slot0.unlocked := true
 }
 
-/// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IkodexV3PoolActions
 entry collect(
     /* address */ recipient_collect: address,
     /* int24 */ tickLower_collect: int,
@@ -1815,7 +1815,7 @@ entry collect(
     slot0.unlocked := true
 }
 
-/// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IkodexV3PoolActions
 /// @dev noDelegateCall is applied indirectly via _modifyPosition
 entry burn(
     /* int24 */ tickLower_burn: int,
@@ -2613,7 +2613,7 @@ function swapMathComputeSwapStep(
     return ((sqrtRatioNextX96, amountIn, amountOut, feeAmount))
 }
 
-/// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IkodexV3PoolActions
 entry swap(
     /* address */ recipient: address,
     /* bool */ zeroForOne: bool,
@@ -2911,8 +2911,8 @@ entry swap(
             balance0 ?:= int_to_nat(balance0 + amount0) : INVALID_NAT;
             transfer 0tz to token0 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount0_nat));
             // should be remove token transfer part
-            // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
-            transfer 0tz to caller call uniswapV3SwapCallback<int * int * bytes>((amount0, amount1, data))
+            // IkodexV3SwapCallback(caller).kodexV3SwapCallback(amount0, amount1, data);
+            transfer 0tz to caller call kodexV3SwapCallback<int * int * bytes>((amount0, amount1, data))
             
             // do_require(balance0Before.add(uint256(amount0)) <= balance0(), "IIA");
         end else begin
@@ -2928,8 +2928,8 @@ entry swap(
             balance0 ?:= int_to_nat(balance0 + amount1) : INVALID_NAT;
             transfer 0tz to token1 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount1_nat));
             // should be remove token transfer part
-            // IUniswapV3SwapCallback(caller).uniswapV3SwapCallback(amount0, amount1, data);
-            transfer 0tz to caller call uniswapV3SwapCallback<int * int * bytes>((amount0, amount1, data))
+            // IkodexV3SwapCallback(caller).kodexV3SwapCallback(amount0, amount1, data);
+            transfer 0tz to caller call kodexV3SwapCallback<int * int * bytes>((amount0, amount1, data))
             
             // do_require(balance1Before.add(uint256(amount1)) <= balance1(), "IIA");
         end;
@@ -2939,7 +2939,7 @@ entry swap(
     }
 }
 
-/// @inheritdoc IUniswapV3PoolActions
+/// @inheritdoc IkodexV3PoolActions
 // entry flash(
 //     /* address */ recipient: address,
 //     /* uint256 */ amount0: nat,
@@ -2969,7 +2969,7 @@ entry swap(
 //             transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, amount1));
 //         end;
 
-//         // IUniswapV3FlashCallback(caller).uniswapV3FlashCallback(fee0, fee1, data);
+//         // IkodexV3FlashCallback(caller).kodexV3FlashCallback(fee0, fee1, data);
 
 //         // uint256 balance0After = balance0();
 //         // uint256 balance1After = balance1();
@@ -2999,7 +2999,7 @@ entry swap(
 //     }
 // }
 
-/// @inheritdoc IUniswapV3PoolOwnerActions
+/// @inheritdoc IkodexV3PoolOwnerActions
 entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override */ {
     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
     slot0.unlocked := false;
@@ -3011,7 +3011,7 @@ entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override 
     slot0.unlocked := true
 }
 
-/// @inheritdoc IUniswapV3PoolOwnerActions
+/// @inheritdoc IkodexV3PoolOwnerActions
 entry collectProtocol(
     /* address */ recipient: address,
     /* uint128 */ amount0Requested: nat,

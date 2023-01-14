@@ -1,4 +1,4 @@
-archetype IUniswapV3PoolEvents
+archetype IkodexV3PoolEvents
 
 event Initialize {sqrtPriceX96 : nat; tick : int}
 

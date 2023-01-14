@@ -1,0 +1,1210 @@
+archetype kodexV3Library
+
+constant INVALID_NAT             : string = "INVALID_NAT"
+constant INVALID_INT_NAT         : string = "INVALID_INT_NAT"
+constant INVALID_UNPACK          : string = "INVALID_UNPACK"
+constant INVALID_RECORD          : string = "INVALID_RECORD"
+
+constant MIN_TICK: int = -887272
+constant MAX_TICK: int = -MIN_TICK
+/// @dev The minimum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MIN_TICK)
+constant MIN_SQRT_RATIO: nat = 4295128739
+/// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
+constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
+constant MAX_HISTORY: nat = 65536
+constant RESOLUTION: nat = 96
+constant Q64: nat = 1 <<| 64
+constant Q96: nat = 1 <<| 96
+constant Q128: nat = 1 <<| 128
+constant Q160: nat = 1 <<| 160
+constant Q256: nat = 1 <<| 256
+constant UnixStartTime: date = 1970-01-01
+constant original: address = self_address
+
+record PoolKey {
+    token0_poolKey: address;
+    token1_poolKey: address;
+    fee_poolKey: nat
+} as (((token0, token1), fee))
+
+record MintCallbackData {
+    poolKey: PoolKey;
+    payer: address; 
+}
+
+record SwapCallbackData {
+    path_SwapCallbackData: bytes;
+    payer_SwapCallbackData: address;
+}
+
+variable fee: nat = 0
+variable tickSpacing: int = 0
+variable maxLiquidityPerTick: nat = 0
+
+variable balance0: nat = 0
+variable balance1: nat = 0
+
+/// @inheritdoc IkodexV3PoolState
+record Slot0 {
+    // the current price
+    sqrtPriceX96: nat;
+    // the current tick
+    tick: int;
+    // the most-recently updated index of the observations array
+    observationIndex: nat;
+    // the current maximum number of observations that are being stored
+    observationCardinality: nat;
+    // the next maximum number of observations to store, triggered in observations.write
+    observationCardinalityNext: nat;
+    // the current protocol fee as a percentage of the swap fee taken on withdrawal
+    // represented as an integer denominator (1/x)%
+    feeProtocol: nat;
+    // whether the pool is locked
+    unlocked: bool;
+}
+
+variable slot0: Slot0 = {
+    sqrtPriceX96                = 0;
+    tick                        = 0;
+    observationIndex            = 0;
+    observationCardinality      = 0;
+    observationCardinalityNext  = 0;
+    feeProtocol                 = 0;
+    unlocked                    = false
+}
+
+/// @inheritdoc IkodexV3PoolState
+variable feeGrowthGlobal0X128 : nat = 0
+/// @inheritdoc IkodexV3PoolState
+variable feeGrowthGlobal1X128 : nat = 0
+
+// accumulated protocol fees in token0/token1 units
+record ProtocolFees {
+    token0_fees: nat;
+    token1_fees: nat;
+} as ((token0, token1))
+/// @inheritdoc IkodexV3PoolState
+variable protocolFees: ProtocolFees = {
+    token0_fees = 0;
+    token1_fees = 0
+}
+
+/// @inheritdoc IkodexV3PoolState
+variable liquidity : nat = 0
+
+// info stored for each initialized individual tick
+record TickInfo {
+    // the total position liquidity that references this tick
+    liquidityGross: nat;
+    // amount of net liquidity added (subtracted) when tick is crossed from left to right (right to left),
+    liquidityNet: int;
+    // fee growth per unit of liquidity on the _other_ side of this tick (relative to the current tick)
+    // only has relative meaning, not absolute — the value depends on when the tick is initialized
+    feeGrowthOutside0X128: nat;
+    feeGrowthOutside1X128: nat;
+    // the cumulative tick value on the other side of the tick
+    tickCumulativeOutside: int;
+    // the seconds per unit of liquidity on the _other_ side of this tick (relative to the current tick)
+    // only has relative meaning, not absolute — the value depends on when the tick is initialized
+    secondsPerLiquidityOutsideX128: nat;
+    // the seconds spent on the other side of the tick (relative to the current tick)
+    // only has relative meaning, not absolute — the value depends on when the tick is initialized
+    secondsOutside: nat;
+    // true iff the tick is initialized, i.e. the value is exactly equivalent to the expression liquidityGross <> 0
+    // these 8 bits are set to prevent fresh sstores when crossing newly initialized ticks
+    %initialized: bool;
+}
+
+/// @inheritdoc IkodexV3PoolState
+asset ticks identified by tickId to big_map {
+    tickId: int;
+    info: TickInfo;
+}
+/// @inheritdoc IkodexV3PoolState
+asset tickBitmap identified by tick_tickBmp to big_map {
+    tick_tickBmp : int;
+    tickSpacing_tickBmp: nat = 0;
+}
+record PositionInfo {
+    // the amount of liquidity owned by this position
+    liquidity_PosInfo: nat;
+    // fee growth per unit of liquidity as of the last update to liquidity or fees owed
+    feeGrowthInside0LastX128_PosInfo: nat;
+    feeGrowthInside1LastX128_PosInfo: nat;
+    // the fees owed to the position owner in token0/token1
+    tokensOwed0_PosInfo: nat;
+    tokensOwed1_PosInfo: nat;
+} as ((liquidity, (feeGrowthInside0LastX128, feeGrowthInside1LastX128), (tokensOwed0, tokensOwed1)))
+/// @inheritdoc IkodexV3PoolState
+asset positions identified by positionId_owner positionId_tickLower positionId_tickUpper to big_map {
+    positionId_owner: address;
+    positionId_tickLower: int;
+    positionId_tickUpper: int;
+    positionInfo: PositionInfo;
+}
+record Observation {
+    // the block timestamp of the observation
+    blockTimestamp_Obs: nat;
+    // the tick accumulator, i.e. tick * time elapsed since the pool was first initialized
+    tickCumulative_Obs: int;
+    // the seconds per liquidity, i.e. seconds elapsed / max(1, liquidity) since the pool was first initialized
+    secondsPerLiquidityCumulativeX128_Obs: nat;
+    // whether or not the observation is initialized
+    initialized_Obs: bool;
+} as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
+/// @inheritdoc IkodexV3PoolState
+// Oracle.Observation[65535] public override observations;
+asset observations identified by observation_key to big_map {
+    observation_key: nat;
+    observation_value: Observation;
+}
+
+/// @dev Common checks for valid tick inputs.
+view checkTicks(tickLower: int, tickUpper: int): bool {
+    do_require(tickLower < tickUpper, "TLU");
+    do_require(tickLower >= MIN_TICK, "TLM");
+    do_require(tickUpper <= MAX_TICK, "TUM");
+    return true
+}
+
+/// @dev Returns the block timestamp truncated to 32 bits, i.e. mod 2**32. This method is overridden in tests.
+view blockTimestamp_(): nat {
+    const timestamp ?= int_to_nat((now - UnixStartTime) div 1s) : INVALID_NAT;
+    return timestamp
+    // return uint32(block.timestamp); // truncation is desired
+}
+
+// / @inheritdoc IkodexV3PoolDerivedState
+view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
+// (
+//         /* tickCumulativeInside: */ int *
+//         /* secondsPerLiquidityInsideX128: */ nat *
+//         /* secondsInside: */ nat
+// )
+{
+    do_fail_if(self_address <> original, ("DelegateCall", original));
+    do_require(tickLower < tickUpper, "TLU");
+    do_require(tickLower >= MIN_TICK, "TLM");
+    do_require(tickUpper <= MAX_TICK, "TUM");
+
+    var tickCumulativeInside: int = 0;
+    var secondsPerLiquidityInsideX128: nat = 0;
+    var secondsInside: nat = 0;
+
+    var tickCumulativeLower: int = 0;
+    var tickCumulativeUpper: int = 0;
+    var secondsPerLiquidityOutsideLowerX128: nat = 0;
+    var secondsPerLiquidityOutsideUpperX128: nat = 0;
+    var secondsOutsideLower: nat = 0;
+    var secondsOutsideUpper: nat = 0;
+
+    var lower: TickInfo = ticks[tickLower].info;
+    var upper: TickInfo = ticks[tickUpper].info;
+    tickCumulativeLower := lower.tickCumulativeOutside;
+    secondsPerLiquidityOutsideLowerX128 := lower.secondsPerLiquidityOutsideX128;
+    secondsOutsideLower :=  lower.secondsOutside;
+    do_require(lower.%initialized, "ERR");
+
+    tickCumulativeUpper := upper.tickCumulativeOutside;
+    secondsPerLiquidityOutsideUpperX128 := upper.secondsPerLiquidityOutsideX128;
+    secondsOutsideUpper := upper.secondsOutside;
+    do_require(upper.%initialized, "ERR");
+
+    // this is memory, so don't need storage
+    var slot0_: Slot0 = slot0;
+
+    if (slot0_.tick < tickLower) then begin
+        tickCumulativeInside := tickCumulativeLower - tickCumulativeUpper;
+        secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128) : INVALID_NAT;
+        secondsInside ?:= int_to_nat(secondsOutsideLower - secondsOutsideUpper) : INVALID_NAT;
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end else if (slot0_.tick < tickUpper) then begin
+        var time ?= call_view<nat>(self_address, "blockTimestamp_", Unit) : INVALID_NAT;
+        const retVal ?= call_view<int * nat>(self_address, "observationsObserveSingle_view", (
+            time,
+            0,
+            slot0_.tick,
+            slot0_.observationIndex,
+            liquidity,
+            slot0_.observationCardinality
+        )) : INVALID_RECORD;
+        const tickCumulative: int = retVal[0];
+        const secondsPerLiquidityCumulativeX128: nat = retVal[1];
+        tickCumulativeInside := tickCumulative - tickCumulativeLower - tickCumulativeUpper;
+        secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityCumulativeX128 - secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128) : INVALID_NAT;
+        secondsInside ?:= int_to_nat(time - secondsOutsideLower - secondsOutsideUpper) : INVALID_NAT;
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end else begin
+        tickCumulativeInside := tickCumulativeUpper - tickCumulativeLower;
+        secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideUpperX128 - secondsPerLiquidityOutsideLowerX128) : INVALID_NAT;
+        secondsInside ?:= int_to_nat(secondsOutsideUpper - secondsOutsideLower) : INVALID_NAT;
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end
+}
+
+/// @inheritdoc IkodexV3PoolDerivedState
+view observe(secondsAgos: list<nat>)
+    /* external
+    view
+    override
+    returns */ : list<int> /* int56[] memory tickCumulatives */ * list<nat> /* uint160[] memory secondsPerLiquidityCumulativeX128s */
+{
+    do_fail_if(self_address <> original, ("DelegateCall", original));
+    do_require(slot0.observationCardinality > 0, "I");
+
+    var time_val ?= call_view<nat>(self_address, "blockTimestamp_", Unit) : INVALID_NAT;
+    var tickCumulatives: list<int> = [];
+    var secondsPerLiquidityCumulativeX128s: list<nat> = [];
+    var i = 0;
+    while (i < length(secondsAgos)) do
+        const retVal ?= call_view<int * nat>(self_address, "observationsObserveSingle_view", (
+            time_val,
+            (nth(secondsAgos, i) ? the : 0),
+            slot0.tick,
+            slot0.observationIndex,
+            liquidity,
+            slot0.observationCardinality
+        )) : INVALID_RECORD;
+        tickCumulatives := concat(tickCumulatives, [retVal[0]]);
+        secondsPerLiquidityCumulativeX128s := concat(secondsPerLiquidityCumulativeX128s, [retVal[1]]);
+        i += 1
+    done;
+    // }
+    return ((tickCumulatives, secondsPerLiquidityCumulativeX128s))
+}
+
+/// @notice Calculates sqrt(1.0001^tick) * 2^96
+/// @dev Throws if |tick| > max tick
+/// @param tick The input tick for the above formula
+/// @return sqrtPriceX96 A Fixed point Q64.96 number representing the sqrt of the ratio of the two assets (token1/token0)
+/// at the given tick
+view tickMathGetSqrtRatioAtTick(tick_tickMathGetSqrtRatioAtTick: int) : nat {
+    var absTick = abs(tick_tickMathGetSqrtRatioAtTick);
+    do_require(absTick <= MAX_TICK, "T");
+
+    var ratio = absTick % 2 <> 0 ? 340265354078544963557816517032075149313 : 340282366920938463463374607431768211456;
+    if ((absTick div (1 <<| 1)) % 2 <> 0) then ratio := (ratio * 340248342086729790484326174814286782778) |>> 128;
+    if ((absTick div (1 <<| 2)) % 2 <> 0) then ratio := (ratio * 340214320654664324051920982716015181260) |>> 128;
+    if ((absTick div (1 <<| 3)) % 2 <> 0) then ratio := (ratio * 340146287995602323631171512101879684304) |>> 128;
+    if ((absTick div (1 <<| 4)) % 2 <> 0) then ratio := (ratio * 340010263488231146823593991679159461444) |>> 128;
+    if ((absTick div (1 <<| 5)) % 2 <> 0) then ratio := (ratio * 339738377640345403697157401104375502016) |>> 128;
+    if ((absTick div (1 <<| 6)) % 2 <> 0) then ratio := (ratio * 339195258003219555707034227454543997025) |>> 128;
+    if ((absTick div (1 <<| 7)) % 2 <> 0) then ratio := (ratio * 338111622100601834656805679988414885971) |>> 128;
+    if ((absTick div (1 <<| 8)) % 2 <> 0) then ratio := (ratio * 335954724994790223023589805789778977700) |>> 128;
+    if ((absTick div (1 <<| 9)) % 2 <> 0) then ratio := (ratio * 331682121138379247127172139078559817300) |>> 128;
+    if ((absTick div (1 <<| 10)) % 2 <> 0) then ratio := (ratio * 323299236684853023288211250268160618739) |>> 128;
+    if ((absTick div (1 <<| 11)) % 2 <> 0) then ratio := (ratio * 307163716377032989948697243942600083929) |>> 128;
+    if ((absTick div (1 <<| 12)) % 2 <> 0) then ratio := (ratio * 277268403626896220162999269216087595045) |>> 128;
+    if ((absTick div (1 <<| 13)) % 2 <> 0) then ratio := (ratio * 225923453940442621947126027127485391333) |>> 128;
+    if ((absTick div (1 <<| 14)) % 2 <> 0) then ratio := (ratio * 149997214084966997727330242082538205943) |>> 128;
+    if ((absTick div (1 <<| 15)) % 2 <> 0) then ratio := (ratio * 66119101136024775622716233608466517926) |>> 128;
+    if ((absTick div (1 <<| 16)) % 2 <> 0) then ratio := (ratio * 12847376061809297530290974190478138313) |>> 128;
+    if ((absTick div (1 <<| 17)) % 2 <> 0) then ratio := (ratio * 485053260817066172746253684029974020) |>> 128;
+    if ((absTick div (1 <<| 18)) % 2 <> 0) then ratio := (ratio * 691415978906521570653435304214168) |>> 128;
+    if ((absTick div (1 <<| 19)) % 2 <> 0) then ratio := (ratio * 1404880482679654955896180642) |>> 128;
+
+    if (tick_tickMathGetSqrtRatioAtTick > 0) then ratio := abs(Q256 - 1) div ratio;
+
+    // this divides by 1<<32 rounding up to go from a Q128.128 to a Q128.96.
+    // we then downcast because we know the result always fits within 160 bits due to our tick input constraint
+    // we round up in the division so getTickAtSqrtRatio of the output price is always consistent
+    const sqrtPriceX96_val = (ratio |>> 32) + ((ratio % (1 <<| 32) = 0) ? 0 : 1);
+
+    return sqrtPriceX96_val
+}
+
+/// @notice Calculates the greatest tick value such that getRatioAtTick(tick) <= ratio
+/// @dev Throws in case sqrtPriceX96 < MIN_SQRT_RATIO, as MIN_SQRT_RATIO is the lowest value getRatioAtTick may
+/// ever return.
+/// @param sqrtPriceX96 The sqrt ratio for which to compute the tick as a Q64.96
+/// @return tick The greatest tick for which the ratio is less than or equal to the input ratio
+view tickMathGetTickAtSqrtRatio(sqrtPriceX96_getTickAtSqrtRatio: nat) : int {
+    // second inequality must be < because the price can never reach the price at the max tick
+    do_require(sqrtPriceX96_getTickAtSqrtRatio >= MIN_SQRT_RATIO and sqrtPriceX96_getTickAtSqrtRatio < MAX_SQRT_RATIO, "R");
+    var ratio: nat = sqrtPriceX96_getTickAtSqrtRatio <<| 32;
+
+    var r: nat = ratio;
+    var msb: nat = 0;
+
+    var gt_val: nat = 0;
+    var f: nat = 0;
+
+    gt_val := ((r + 1) > Q128) ? 1 : 0;
+    f := gt_val <<| 7;
+    msb := msb or f;
+    r := r |>> f;
+
+    gt_val := ((r + 1) > Q64) ? 1 : 0;
+    f := gt_val <<| 6;
+    msb := msb or f;
+    r := r |>> f;
+
+    gt_val := ((r + 1) > (1 <<| 32)) ? 1 : 0;
+    f := gt_val <<| 5;
+    msb := msb or f;
+    r := r |>> f;
+    
+    gt_val := ((r + 1) > (1 <<| 16)) ? 1 : 0;
+    f := gt_val <<| 4;
+    msb := msb or f;
+    r := r |>> f;
+
+    gt_val := ((r + 1) > (1 <<| 8)) ? 1 : 0;
+    f := gt_val <<| 3;
+    msb := msb or f;
+    r := r |>> f;
+    
+    gt_val := ((r + 1) > (1 <<| 4)) ? 1 : 0;
+    f := gt_val <<| 2;
+    msb := msb or f;
+    r := r |>> f;
+    
+    gt_val := ((r + 1) > (1 <<| 2)) ? 1 : 0;
+    f := gt_val <<| 1;
+    msb := msb or f;
+    r := r |>> f;
+
+    f := (r > 1) ? 1 : 0;
+    msb := msb or f;
+    
+    if (msb >= 128) then begin
+        const msb_nat ?= int_to_nat(msb - 127) : INVALID_NAT;
+        r := ratio |>> msb_nat
+    end else begin
+        const msb_nat ?= int_to_nat(127 - msb) : INVALID_NAT;
+        r := ratio <<| msb_nat
+    end;
+
+    var log_2: int = (msb - 128) * Q64;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 63);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 62);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 61);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 60);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 59);
+    r := r |>> f;
+
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 58);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 57);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 56);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 55);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 54);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 53);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 52);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 51);
+    r := r |>> f;
+    
+    r := (r * r) |>> 127;
+    f := r |>> 128;
+    log_2 := (int_to_nat(log_2) ? the : 0) or (f <<| 50);
+
+    const log_sqrt10001: int = log_2 * 255738958999603826347141; // 128.128 number
+
+    const tickLow: int = (log_sqrt10001 - 3402992956809132418596140100660247210) div Q128;
+    const tickHi: int = (log_sqrt10001 + 291339464771989622907027621153398088495) div Q128;
+
+    const tick_val: int = (tickLow = tickHi) ? tickLow : ((tickMathGetSqrtRatioAtTick(tickHi) <= sqrtPriceX96_getTickAtSqrtRatio) ? tickHi : tickLow);
+    return tick_val
+}
+
+record ModifyPositionParams {
+    // the address that owns the position
+    owner_ModifyPosParam: address;
+    // the lower and upper tick of the position
+    tickLower_ModifyPosParam: int;
+    tickUpper_ModifyPosParam: int;
+    // any change in liquidity
+    liquidityDelta_ModifyPosParam: int;
+} as ((owner, tickLower, tickUpper, liquidityDelta))
+
+/// @notice comparator for 32-bit timestamps
+/// @dev safe for 0 or 1 overflows, a and b _must_ be chronologically before or equal to time
+/// @param time A timestamp truncated to 32 bits
+/// @param a A comparison timestamp from which to determine the relative position of `time`
+/// @param b From which to determine the relative position of `time`
+/// @return bool Whether `a` is chronologically <= `b`
+view lte_tickBmpNITWOW(
+    time: nat,
+    a: nat,
+    b: nat
+) : bool {
+    var retVal = false;
+    // if there hasn't been overflow, no need to adjust
+    if (a <= time and b <= time) then begin
+        retVal := a <= b;
+        return retVal
+    end else begin
+        const aAdjusted = a > time ? a : a + 1 <<| 32;
+        const bAdjusted = b > time ? b : b + 1 <<| 32;
+
+        retVal := aAdjusted <= bAdjusted;
+        return retVal
+    end
+}
+
+/// @notice Fetches the observations beforeOrAt and atOrAfter a target, i.e. where [beforeOrAt, atOrAfter] is satisfied.
+/// The result may be the same observation, or adjacent observations.
+/// @dev The answer must be contained in the array, used when the target is located within the stored observation
+/// boundaries: older than the most recent observation and younger, or the same age as, the oldest observation
+/// @param self The stored oracle array
+/// @param time The current block.timestamp
+/// @param target The timestamp at which the reserved observation should be for
+/// @param index The index of the observation that was most recently written to the observations array
+/// @param cardinality The number of populated elements in the oracle array
+/// @return beforeOrAt The observation recorded before, or at, the target
+/// @return atOrAfter The observation recorded at, or after, the target
+view binarySearch(
+    time_binarySearch: nat,
+    target_binarySearch: nat,
+    index_binarySearch: nat,
+    cardinality_binarySearch: nat
+) : Observation * Observation {
+    var l = (index_binarySearch + 1) % cardinality_binarySearch; // oldest observation
+    var r = l + cardinality_binarySearch - 1; // newest observation
+    var beforeOrAt: Observation = {0; 0; 0; false};
+    var atOrAfter: Observation = {0; 0; 0; false};
+    var i = 0;
+    var condWhile = true;
+    while condWhile do 
+        i ?:= int_to_nat((l + r) div 2) : INVALID_NAT;
+
+        beforeOrAt := observations[i % cardinality_binarySearch].observation_value;
+
+        // we've landed on an uninitialized tick, keep searching higher (more recently)
+        if (beforeOrAt.initialized_Obs = false) then
+            l := i + 1
+        else begin
+            atOrAfter := observations[(i + 1) % cardinality_binarySearch].observation_value;
+
+            var targetAtOrAfter = lte_tickBmpNITWOW(time_binarySearch, beforeOrAt.blockTimestamp_Obs, target_binarySearch);
+
+            // check if we've found the answer!
+            if (targetAtOrAfter and lte_tickBmpNITWOW(time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) then
+                condWhile := false;
+
+            if (targetAtOrAfter = false) then r := i - 1
+            else l := i + 1
+        end
+    done;
+    return ((beforeOrAt, atOrAfter))
+}
+
+view transform(
+    last_transform_param: Observation,
+    blockTimestamp_transform_param: nat,
+    tick_transform_param: int,
+    liquidity_transform_param: nat
+) : Observation {
+    const delta ?= int_to_nat(blockTimestamp_transform_param - last_transform_param.blockTimestamp_Obs) : INVALID_NAT;
+    const tickCumulative_val = last_transform_param.tickCumulative_Obs + tick_transform_param * delta;
+    const secondsPerLiquidityCumulativeX128_val = 
+        last_transform_param.secondsPerLiquidityCumulativeX128_Obs + ((delta <<| 128) div (liquidity_transform_param > 0 ? liquidity_transform_param : 1));
+
+    const retVal: Observation = {
+        blockTimestamp_transform_param;
+        tickCumulative_val;
+        secondsPerLiquidityCumulativeX128_val;
+        true
+    };
+
+    return retVal
+}
+
+view getSurroundingObservations(
+    time_getSurroundingObservations: nat,
+    target_getSurroundingObservations: nat,
+    tick_getSurroundingObservations: int,
+    index_getSurroundingObservations: nat,
+    liquidity_getSurroundingObservations: nat,
+    cardinality_getSurroundingObservations: nat
+) : Observation * Observation {
+    // optimistically set before to the newest observation
+    var beforeOrAt: Observation = observations[index_getSurroundingObservations].observation_value;
+    var atOrAfter: Observation = {0; 0; 0; false};
+
+    // if the target is chronologically at or after the newest observation, we can early return
+    if (lte_tickBmpNITWOW(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations)) then begin
+        if (beforeOrAt.blockTimestamp_Obs = target_getSurroundingObservations) then
+            // if newest observation equals target, we're in the same block, so we can ignore atOrAfter
+            return ((beforeOrAt, atOrAfter))
+        else
+            // otherwise, we need to transform
+            return ((beforeOrAt, transform(beforeOrAt, target_getSurroundingObservations, tick_getSurroundingObservations, liquidity_getSurroundingObservations)))
+    end else begin
+        // now, set before to the oldest observation
+        beforeOrAt := observations[(index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations].observation_value;
+        if (beforeOrAt.initialized_Obs = false) then beforeOrAt := observations[0].observation_value;
+
+        // ensure that the target is chronologically at or after the oldest observation
+        do_require(lte_tickBmpNITWOW(time_getSurroundingObservations, beforeOrAt.blockTimestamp_Obs, target_getSurroundingObservations), "OLD");
+
+        // if we've reached this point, we have to binary search
+        return binarySearch(time_getSurroundingObservations, target_getSurroundingObservations, index_getSurroundingObservations, cardinality_getSurroundingObservations)
+    end
+}
+
+view observationsObserveSingle(
+    time_observeSingle: nat,
+    secondsAgo_observeSingle: nat,
+    tick_observeSingle: int,
+    index_observeSingle: nat,
+    liquidity_observeSingle: nat,
+    cardinality_observeSingle: nat
+) : int * nat {
+    if (secondsAgo_observeSingle = 0) then begin
+        var last: Observation = observations[index_observeSingle].observation_value;
+        if (last.blockTimestamp_Obs <> time_observeSingle) then 
+            last := transform(last, time_observeSingle, tick_observeSingle, liquidity_observeSingle);
+        const val1 = last.tickCumulative_Obs;
+        const val2 = last.secondsPerLiquidityCumulativeX128_Obs;
+        return ((val1, val2))
+    end else begin
+
+        var target ?= int_to_nat(time_observeSingle - secondsAgo_observeSingle) : INVALID_NAT;
+
+        const retVal = getSurroundingObservations(
+            time_observeSingle,
+            target,
+            tick_observeSingle,
+            index_observeSingle,
+            liquidity_observeSingle,
+            cardinality_observeSingle
+        );
+        const beforeOrAt = retVal[0];
+        const atOrAfter = retVal[1];
+
+        if (target = beforeOrAt.blockTimestamp_Obs) then 
+            // we're at the left boundary
+            return ((beforeOrAt.tickCumulative_Obs, beforeOrAt.secondsPerLiquidityCumulativeX128_Obs))
+        else if (target = atOrAfter.blockTimestamp_Obs) then
+            // we're at the right boundary
+            return ((atOrAfter.tickCumulative_Obs, atOrAfter.secondsPerLiquidityCumulativeX128_Obs))
+        else begin
+            // we're in the middle
+            const observationTimeDelta = atOrAfter.blockTimestamp_Obs - beforeOrAt.blockTimestamp_Obs;
+            const targetDelta = target - beforeOrAt.blockTimestamp_Obs;
+            const retVal1 = beforeOrAt.tickCumulative_Obs + ((atOrAfter.tickCumulative_Obs - beforeOrAt.tickCumulative_Obs) div observationTimeDelta) * targetDelta;
+            const retVal2_int = 
+                beforeOrAt.secondsPerLiquidityCumulativeX128_Obs + 
+                (atOrAfter.secondsPerLiquidityCumulativeX128_Obs - beforeOrAt.secondsPerLiquidityCumulativeX128_Obs) * targetDelta div observationTimeDelta;
+            const retVal2 ?= int_to_nat(retVal2_int) : INVALID_NAT;
+            return ((retVal1, retVal2))
+        end
+    end
+}
+
+/// @notice Retrieves fee growth data
+/// @param self The mapping containing all tick information for initialized ticks
+/// @param tickLower The lower tick boundary of the position
+/// @param tickUpper The upper tick boundary of the position
+/// @param tickCurrent The current tick
+/// @param feeGrowthGlobal0X128 The all-time global fee growth, per unit of liquidity, in token0
+/// @param feeGrowthGlobal1X128 The all-time global fee growth, per unit of liquidity, in token1
+/// @return feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
+/// @return feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
+view getFeeGrowthInside(
+    tickLower_getFeeGrowthInside: int,
+    tickUpper_getFeeGrowthInside: int,
+    tickCurrent_getFeeGrowthInside: int,
+    feeGrowthGlobal0X128_getFeeGrowthInside: nat,
+    feeGrowthGlobal1X128_getFeeGrowthInside: nat
+) : nat * nat {
+    const lower = ticks[tickLower_getFeeGrowthInside].info;
+    const upper = ticks[tickUpper_getFeeGrowthInside].info;
+
+    // calculate fee growth below
+    var feeGrowthBelow0X128 = 0;
+    var feeGrowthBelow1X128 = 0;
+    if (tickCurrent_getFeeGrowthInside >= tickLower_getFeeGrowthInside) then begin
+        feeGrowthBelow0X128 := lower.feeGrowthOutside0X128;
+        feeGrowthBelow1X128 := lower.feeGrowthOutside1X128;
+    end else begin
+        feeGrowthBelow0X128 ?:= int_to_nat(feeGrowthGlobal0X128_getFeeGrowthInside - lower.feeGrowthOutside0X128) : INVALID_NAT;
+        feeGrowthBelow1X128 ?:= int_to_nat(feeGrowthGlobal1X128_getFeeGrowthInside - lower.feeGrowthOutside1X128) : INVALID_NAT;
+    end;
+
+    // calculate fee growth above
+    var feeGrowthAbove0X128 = 0;
+    var feeGrowthAbove1X128 = 0;
+    if (tickCurrent_getFeeGrowthInside < tickUpper_getFeeGrowthInside) then begin
+        feeGrowthAbove0X128 := upper.feeGrowthOutside0X128;
+        feeGrowthAbove1X128 := upper.feeGrowthOutside1X128;
+    end else begin
+        feeGrowthAbove0X128 ?:= int_to_nat(feeGrowthGlobal0X128_getFeeGrowthInside - upper.feeGrowthOutside0X128) : INVALID_NAT;
+        feeGrowthAbove1X128 ?:= int_to_nat(feeGrowthGlobal1X128_getFeeGrowthInside - upper.feeGrowthOutside1X128) : INVALID_NAT;
+    end;
+
+    const feeGrowthInside0X128 ?= int_to_nat(feeGrowthGlobal0X128_getFeeGrowthInside - feeGrowthBelow0X128 - feeGrowthAbove0X128) : INVALID_NAT;
+    const feeGrowthInside1X128 ?= int_to_nat(feeGrowthGlobal1X128_getFeeGrowthInside - feeGrowthBelow1X128 - feeGrowthAbove1X128) : INVALID_NAT;
+    return ((feeGrowthInside0X128, feeGrowthInside1X128))
+}
+
+/// @notice Gets the amount0 delta between two prices
+/// @dev Calculates liquidity / sqrt(lower) - liquidity / sqrt(upper),
+/// i.e. liquidity * (sqrt(upper) - sqrt(lower)) / (sqrt(upper) * sqrt(lower))
+/// @param sqrtRatioAX96_sPMGA0D A sqrt price
+/// @param sqrtRatioBX96_sPMGA0D Another sqrt price
+/// @param liquidity The amount of usable liquidity
+/// @param roundUp_sPMGA0D Whether to round the amount up or down
+/// @return amount0 Amount of token0 required to cover a position of size liquidity between the two passed prices
+view sqrtPriceMathGetAmount0Delta_round(
+    sqrtRatioAX96_sPMGA0D: nat,
+    sqrtRatioBX96_sPMGA0D: nat,
+    liquidity_sPMGA0D: nat,
+    roundUp_sPMGA0D: bool
+) : nat {
+    var sqrtRatioAX96_val = sqrtRatioAX96_sPMGA0D;
+    var sqrtRatioBX96_val = sqrtRatioBX96_sPMGA0D;
+    if (sqrtRatioAX96_sPMGA0D > sqrtRatioBX96_sPMGA0D) then begin
+        sqrtRatioAX96_val := sqrtRatioBX96_sPMGA0D;
+        sqrtRatioBX96_val := sqrtRatioAX96_sPMGA0D
+    end;
+
+    const numerator1 = liquidity_sPMGA0D <<| RESOLUTION;
+    const numerator2 ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_NAT;
+
+    do_require(sqrtRatioAX96_val > 0, "ERR");
+
+    if roundUp_sPMGA0D then begin
+        const val1 ?= int_to_nat(ceil(numerator1 * numerator2 / sqrtRatioBX96_val)) : INVALID_NAT;
+        const val2 ?= int_to_nat(ceil(val1 / sqrtRatioAX96_val)) : INVALID_NAT;
+        return val2
+    end else begin
+        return (numerator1 * numerator2 div sqrtRatioBX96_val div sqrtRatioAX96_val);
+    end
+}
+
+/// @notice Helper that gets signed token0 delta
+/// @param sqrtRatioAX96 A sqrt price
+/// @param sqrtRatioBX96 Another sqrt price
+/// @param liquidity The change in liquidity for which to compute the amount0 delta
+/// @return amount0 Amount of token0 corresponding to the passed liquidityDelta between the two prices
+view sqrtPriceMathGetAmount0Delta(
+    sqrtRatioAX96_sPMGA0D: nat,
+    sqrtRatioBX96_sPMGA0D: nat,
+    liquidity_sPMGA0D: int
+) : int {
+    if (liquidity_sPMGA0D < 0) then
+        return (-sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), false))
+    else
+        return (sqrtPriceMathGetAmount0Delta_round(sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), true))
+}
+
+/// @notice Gets the amount1 delta between two prices
+/// @dev Calculates liquidity_sPMGA1D * (sqrt(upper) - sqrt(lower))
+/// @param sqrtRatioAX96_sPMGA1D A sqrt price
+/// @param sqrtRatioBX96_sPMGA1D Another sqrt price
+/// @param liquidity_sPMGA1D The amount of usable liquidity_sPMGA1D
+/// @param roundUp_sPMGA1D Whether to round the amount up, or down
+/// @return amount1 Amount of token1 required to cover a position of size liquidity_sPMGA1D between the two passed prices
+view sqrtPriceMathGetAmount1Delta_round(
+    sqrtRatioAX96_sPMGA1D: nat,
+    sqrtRatioBX96_sPMGA1D: nat,
+    liquidity_sPMGA1D: nat,
+    roundUp_sPMGA1D: bool
+) : nat {
+    var sqrtRatioAX96_val = sqrtRatioAX96_sPMGA1D;
+    var sqrtRatioBX96_val = sqrtRatioBX96_sPMGA1D;
+    if (sqrtRatioAX96_sPMGA1D > sqrtRatioBX96_sPMGA1D) then begin
+        sqrtRatioAX96_val := sqrtRatioBX96_sPMGA1D;
+        sqrtRatioBX96_val := sqrtRatioAX96_sPMGA1D
+    end;
+
+    if roundUp_sPMGA1D then begin
+        const val ?= int_to_nat((ceil(liquidity_sPMGA1D * (sqrtRatioBX96_val - sqrtRatioAX96_val) / Q96))) : INVALID_NAT;
+        return val
+    end else begin
+        var retVal ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_NAT;
+        retVal := liquidity_sPMGA1D * retVal div Q96;
+        return retVal
+    end
+}
+
+/// @notice Helper that gets signed token1 delta
+/// @param sqrtRatioAX96 A sqrt price
+/// @param sqrtRatioBX96 Another sqrt price
+/// @param liquidity The change in liquidity for which to compute the amount1 delta
+/// @return amount1 Amount of token1 corresponding to the passed liquidityDelta between the two prices
+view sqrtPriceMathGetAmount1Delta(
+    sqrtRatioAX96_sPMGA1D: nat,
+    sqrtRatioBX96_sPMGA1D: nat,
+    liquidity_sPMGA1D: int
+) : int {
+    if liquidity_sPMGA1D < 0 then
+        return (-sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), false))
+    else
+        return (sqrtPriceMathGetAmount1Delta_round(sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), true))
+}
+
+record SwapCache {
+    // the protocol fee for the input token
+    feeProtocol_swapCache: nat;
+    // liquidity at the beginning of the swap
+    liquidityStart_swapCache: nat;
+    // the timestamp of the current block
+    blockTimestamp_swapCache: nat;
+    // the current value of the tick accumulator, computed only if we cross an initialized tick
+    tickCumulative_swapCache: int;
+    // the current value of seconds per liquidity accumulator, computed only if we cross an initialized tick
+    secondsPerLiquidityCumulativeX128_swapCache: nat;
+    // whether we've computed and cached the above two accumulators
+    computedLatestObservation_swapCache: bool;
+} as ((feeProtocol, liquidityStart, blockTimestamp, tickCumulative, secondsPerLiquidityCumulativeX128, computedLatestObservation))
+
+// the top level state of the swap, the results of which are recorded in storage at the end
+record SwapState {
+    // the amount remaining to be swapped in/out of the input/output asset
+    amountSpecifiedRemaining_swapState: int;
+    // the amount already swapped out/in of the output/input asset
+    amountCalculated_swapState: int;
+    // current sqrt(price)
+    sqrtPriceX96_swapState: nat;
+    // the tick associated with the current price
+    tick_swapState: int;
+    // the global fee growth of the input token
+    feeGrowthGlobalX128_swapState: nat;
+    // amount of input token paid as protocol fee
+    protocolFee_swapState: nat;
+    // the current liquidity in range
+    liquidity_swapState: nat;
+} as ((amountSpecifiedRemaining, amountCalculated, sqrtPriceX96, tick, feeGrowthGlobalX128, protocolFee, liquidity))
+
+record StepComputations {
+    // the price at the beginning of the step
+    sqrtPriceStartX96_stepComputations: nat;
+    // the next tick to swap to from the current tick in the swap direction
+    tickNext_stepComputations: int;
+    // whether tickNext is initialized or not
+    initialized_stepComputations: bool;
+    // sqrt(price) for the next tick (1/0)
+    sqrtPriceNextX96_stepComputations: nat;
+    // how much is being swapped in in this step
+    amountIn_stepComputations: nat;
+    // how much is being swapped out
+    amountOut_stepComputations: nat;
+    // how much fee is being paid in
+    feeAmount_stepComputations: nat;
+} as ((sqrtPriceStartX96, tickNext, %initialized, sqrtPriceNextX96, amountIn, amountOut, feeAmount))
+
+/// @notice Returns the index of the most significant bit of the number,
+///     where the least significant bit is at index 0 and the most significant bit is at index 255
+/// @dev The view satisfies the property:
+///     x >= 2**mostSignificantBit(x) and x < 2**(mostSignificantBit(x)+1)
+/// @param x the value for which to compute the most significant bit, must be greater than 0
+/// @return r the index of the most significant bit
+view bitMathMostSignificantBit(xx: nat) : nat {
+    do_require(xx > 0, "ERR");
+    var x: nat = xx;
+    var r: nat = 0;
+
+    if (x >= (1 <<| 128)) then begin
+        x := x |>> 128;
+        r += 128
+    end;
+    if (x >= (1 <<| 64)) then begin
+        x := x |>> 64;
+        r += 64
+    end;
+    if (x >= (1 <<| 32)) then begin
+        x := x |>> 32;
+        r += 32
+    end;
+    if (x >= (1 <<| 16)) then begin
+        x := x |>> 16;
+        r += 16
+    end;
+    if (x >= (1 <<| 8)) then begin
+        x := x |>> 8;
+        r += 8
+    end;
+    if (x >= (1 <<| 4)) then begin
+        x := x |>> 4;
+        r += 4
+    end;
+    if (x >= (1 <<| 2)) then begin
+        x := x |>> 2;
+        r += 2
+    end;
+    if (x >= (1 <<| 1)) then r += 1;
+
+    return r
+}
+
+/// @notice Returns the index of the least significant bit of the number,
+///     where the least significant bit is at index 0 and the most significant bit is at index 255
+/// @dev The view satisfies the property:
+///     (x & 2**leastSignificantBit(x)) != 0 and (x & (2**(leastSignificantBit(x)) - 1)) == 0)
+/// @param x the value for which to compute the least significant bit, must be greater than 0
+/// @return r the index of the least significant bit
+view bitMathLeastSignificantBit(xx: nat) : nat {
+    do_require(xx > 0, "ERR");
+    var x: nat = xx;
+    var r: nat = 255;
+
+    if ((x and 340282366920938463463374607431768211455) > 0) then
+        r -= 128
+    else
+        x := x |>> 128;
+    
+    if ((x and 18446744073709551615) > 0) then
+        r -= 64
+    else
+        x := x |>> 64;
+    
+    if ((x and 4294967295) > 0) then
+        r -= 32
+    else
+        x := x |>> 32;
+    
+    if ((x and 65535) > 0) then
+        r -= 16
+    else
+        x := x |>> 16;
+    
+    if ((x and 255) > 0) then
+        r -= 8
+    else
+        x := x |>> 8;
+    
+    if ((x and 15) > 0) then
+        r -= 4
+    else
+        x := x |>> 4;
+    
+    if ((x and 3) > 0) then
+        r -= 2
+    else
+        x := x |>> 2;
+    
+    if ((x and 1) > 0) then r -= 1;
+
+    return r
+}
+
+/// @notice Returns the next initialized tick contained in the same word (or adjacent word) as the tick that is either
+/// to the left (less than or equal to) or right (greater than) of the given tick
+/// @param self The mapping in which to compute the next initialized tick
+/// @param tick The starting tick
+/// @param tickSpacing The spacing between usable ticks
+/// @param lte_tickBmpNITWOW Whether to search for the next initialized tick to the left (less than or equal to the starting tick)
+/// @return next The next initialized or uninitialized tick up to 256 ticks away from the current tick
+/// @return initialized Whether the next tick is initialized, as the view only searches within up to 256 ticks
+view tickBitmapNextInitializedTickWithinOneWord(
+    tick_tickBmpNITWOWord: int,
+    tickSpacing_tickBmpNITWOWord: int,
+    lte_tickBmpNITWOWord: bool
+) : int * bool {
+    var compressed: int = tick_tickBmpNITWOWord div tickSpacing_tickBmpNITWOWord;
+    if (tick_tickBmpNITWOWord < 0 and tick_tickBmpNITWOWord % tickSpacing_tickBmpNITWOWord <> 0) then compressed -= 1; // round towards negative infinity
+
+    var initialized_retVal: bool = false;
+    var next_retVal: int = 0;
+    if (lte_tickBmpNITWOWord) then begin
+        const retVal_: (int * nat) ?= (compressed) /% 256 : INVALID_INT_NAT;
+        const wordPos = retVal_[0];
+        const bitPos = retVal_[1];
+        // all the 1s at or to the right of the current bitPos
+        var mask: nat ?= int_to_nat((1 <<| bitPos) - 1 + (1 <<| bitPos)) : INVALID_INT_NAT;
+        var masked: nat = tickBitmap[wordPos].tickSpacing_tickBmp and mask;
+
+        // if there are no initialized ticks to the right of or at the current tick, return rightmost in the word
+        initialized_retVal := masked <> 0;
+        // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
+        next_retVal := initialized_retVal
+            ? (compressed - (bitPos - bitMathMostSignificantBit(masked))) * tickSpacing_tickBmpNITWOWord
+            : (compressed - bitPos) * tickSpacing_tickBmpNITWOWord;
+    end else begin
+        // start from the word of the next tick, since the current tick state doesn't matter
+        const retVal_: (int * nat) ?= (compressed + 1) /% 256 : INVALID_INT_NAT;
+        const wordPos = retVal_[0];
+        const bitPos = retVal_[1];
+        // all the 1s at or to the left of the bitPos
+        var mask: nat ?= int_to_nat(Q256 - (1 <<| bitPos)) : INVALID_NAT;
+        var masked: nat = tickBitmap[wordPos].tickSpacing_tickBmp and mask;
+
+        // if there are no initialized ticks to the left of the current tick, return leftmost in the word
+        initialized_retVal := masked <> 0;
+        // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
+        next_retVal := initialized_retVal
+            ? (compressed + 1 + (bitMathLeastSignificantBit(masked) - bitPos)) * tickSpacing_tickBmpNITWOWord
+            : (compressed + 1 + (255 - bitPos)) * tickSpacing_tickBmpNITWOWord;
+    end;
+
+    return ((next_retVal, initialized_retVal))
+}
+
+/// @notice Gets the next sqrt price given a delta of token0
+/// @dev Always rounds up, because in the exact output case (increasing price) we need to move the price at least
+/// far enough to get the desired output amount, and in the exact input case (decreasing price) we need to move the
+/// price less in order to not send too much output.
+/// The most precise formula for this is liquidity * sqrtPX96 / (liquidity +- amount * sqrtPX96),
+/// if this is impossible because of overflow, we calculate liquidity / (liquidity / sqrtPX96 +- amount).
+/// @param sqrtPX96 The starting price, i.e. before accounting for the token0 delta
+/// @param liquidity The amount of usable liquidity
+/// @param amount How much of token0 to add or remove from virtual reserves
+/// @param add Whether to add or remove the amount of token0
+/// @return The price after adding or removing amount, depending on add
+view sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(
+    /* uint160 */ sqrtPX96_sqrtPMGNSPFromA0RU: nat,
+    /* uint128 */ liquidity_sqrtPMGNSPFromA0RU: nat,
+    /* uint256 */ amount_sqrtPMGNSPFromA0RU: nat,
+    /* bool */ add_sqrtPMGNSPFromA0RU: bool
+) : nat {
+    // we short circuit amount == 0 because the result is otherwise not guaranteed to equal the input price
+    if (amount_sqrtPMGNSPFromA0RU = 0) then 
+        return sqrtPX96_sqrtPMGNSPFromA0RU
+    else begin
+        var numerator1: nat = liquidity_sqrtPMGNSPFromA0RU <<| RESOLUTION;
+
+        if (add_sqrtPMGNSPFromA0RU) then begin
+            var product: nat = 0;
+            product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
+            if ((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) then begin
+                const denominator: nat = numerator1 + product;
+                if (denominator >= numerator1) then
+                    // always fits in 160 bits
+                    return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
+                else return abs(ceil(numerator1 / (numerator1 div sqrtPX96_sqrtPMGNSPFromA0RU) + amount_sqrtPMGNSPFromA0RU))
+            end else return abs(ceil(numerator1 / (numerator1 div sqrtPX96_sqrtPMGNSPFromA0RU) + amount_sqrtPMGNSPFromA0RU))
+        end else begin
+            var product: nat = 0;
+            product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
+            // if the product overflows, we know the denominator underflows
+            // in addition, we must check that the denominator does not underflow
+            do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), "ERR");
+            const denominator: nat ?= int_to_nat(numerator1 - product) : INVALID_NAT;
+            return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
+        end
+    end
+}
+
+/// @notice Gets the next sqrt price given a delta of token1
+/// @dev Always rounds down, because in the exact output case (decreasing price) we need to move the price at least
+/// far enough to get the desired output amount, and in the exact input case (increasing price) we need to move the
+/// price less in order to not send too much output.
+/// The formula we compute is within <1 wei of the lossless version: sqrtPX96 +- amount / liquidity
+/// @param sqrtPX96 The starting price, i.e., before accounting for the token1 delta
+/// @param liquidity The amount of usable liquidity
+/// @param amount How much of token1 to add, or remove, from virtual reserves
+/// @param add Whether to add, or remove, the amount of token1
+/// @return The price after adding or removing `amount`
+view sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(
+    /* uint160 */ sqrtPX96_sqrtPMGNSPFromA1RD: nat,
+    /* uint128 */ liquidity_sqrtPMGNSPFromA1RD: nat,
+    /* uint256 */ amount_sqrtPMGNSPFromA1RD: nat,
+    /* bool */ add_sqrtPMGNSPFromA1RD: bool
+) : nat {
+    // if we're adding (subtracting), rounding down requires rounding the quotient down (up)
+    // in both cases, avoid a mulDiv for most inputs
+    if (add_sqrtPMGNSPFromA1RD) then begin
+        const quotient: nat = (
+            (amount_sqrtPMGNSPFromA1RD < Q160)
+                ? (amount_sqrtPMGNSPFromA1RD <<| RESOLUTION) div liquidity_sqrtPMGNSPFromA1RD
+                : amount_sqrtPMGNSPFromA1RD * Q96 div liquidity_sqrtPMGNSPFromA1RD
+        );
+
+        return (sqrtPX96_sqrtPMGNSPFromA1RD + quotient)
+    end else begin
+        const quotient: nat = (
+            (amount_sqrtPMGNSPFromA1RD < Q160)
+                ? abs(ceil((amount_sqrtPMGNSPFromA1RD <<| RESOLUTION) / liquidity_sqrtPMGNSPFromA1RD))
+                : abs(ceil(amount_sqrtPMGNSPFromA1RD * Q96 / liquidity_sqrtPMGNSPFromA1RD))
+        );
+
+        do_require(sqrtPX96_sqrtPMGNSPFromA1RD > quotient, "ERR");
+        // always fits 160 bits
+        const retVal: nat ?= int_to_nat(sqrtPX96_sqrtPMGNSPFromA1RD - quotient): INVALID_NAT;
+        return retVal
+    end
+}
+
+/// @notice Gets the next sqrt price given an input amount of token0 or token1
+/// @dev Throws if price or liquidity are 0, or if the next price is out of bounds
+/// @param sqrtPX96 The starting price, i.e., before accounting for the input amount
+/// @param liquidity The amount of usable liquidity
+/// @param amountIn How much of token0, or token1, is being swapped in
+/// @param zeroForOne Whether the amount in is token0 or token1
+/// @return sqrtQX96 The price after adding the input amount to token0 or token1
+view sqrtPriceMathGetNextSqrtPriceFromInput(
+    /* uint160 */ sqrtPX96_sqrlPriceMathGNSPFI: nat,
+    /* uint128 */ liquidity_sqrlPriceMathGNSPFI: nat,
+    /* uint256 */ amountIn_sqrlPriceMathGNSPFI: nat,
+    /* bool */ zeroForOne_sqrlPriceMathGNSPFI: bool
+) : nat
+//  (uint160 sqrtQX96) 
+{
+    do_require(sqrtPX96_sqrlPriceMathGNSPFI > 0, "ERR");
+    do_require(liquidity_sqrlPriceMathGNSPFI > 0, "ERR");
+
+    // round to make sure that we don't pass the target price
+    const retVal: nat = zeroForOne_sqrlPriceMathGNSPFI
+        ? sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(sqrtPX96_sqrlPriceMathGNSPFI, liquidity_sqrlPriceMathGNSPFI, amountIn_sqrlPriceMathGNSPFI, true)
+        : sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(sqrtPX96_sqrlPriceMathGNSPFI, liquidity_sqrlPriceMathGNSPFI, amountIn_sqrlPriceMathGNSPFI, true);
+    
+    return retVal
+}
+
+/// @notice Gets the next sqrt price given an output amount of token0 or token1
+/// @dev Throws if price or liquidity are 0 or the next price is out of bounds
+/// @param sqrtPX96 The starting price before accounting for the output amount
+/// @param liquidity The amount of usable liquidity
+/// @param amountOut How much of token0, or token1, is being swapped out
+/// @param zeroForOne Whether the amount out is token0 or token1
+/// @return sqrtQX96 The price after removing the output amount of token0 or token1
+view sqrtPriceMathGetNextSqrtPriceFromOutput(
+    /* uint160 */ sqrtPX96_sqrlPriceMathGNSPFO: nat,
+    /* uint128 */ liquidity_sqrlPriceMathGNSPFO: nat,
+    /* uint256 */ amountOut_sqrlPriceMathGNSPFO: nat,
+    /* bool */ zeroForOne_sqrlPriceMathGNSPFO: bool
+) : nat
+//  (uint160 sqrtQX96) 
+{
+    do_require(sqrtPX96_sqrlPriceMathGNSPFO > 0, "ERR");
+    do_require(liquidity_sqrlPriceMathGNSPFO > 0, "ERR");
+
+    // round to make sure that we pass the target price
+    const retVal: nat = zeroForOne_sqrlPriceMathGNSPFO
+        ? sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(sqrtPX96_sqrlPriceMathGNSPFO, liquidity_sqrlPriceMathGNSPFO, amountOut_sqrlPriceMathGNSPFO, false)
+        : sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(sqrtPX96_sqrlPriceMathGNSPFO, liquidity_sqrlPriceMathGNSPFO, amountOut_sqrlPriceMathGNSPFO, false);
+    
+    return retVal
+}
+
+/// @notice Computes the result of swapping some amount in, or amount out, given the parameters of the swap
+/// @dev The fee, plus the amount in, will never exceed the amount remaining if the swap's `amountSpecified` is positive
+/// @param sqrtRatioCurrentX96 The current sqrt price of the pool
+/// @param sqrtRatioTargetX96 The price that cannot be exceeded, from which the direction of the swap is inferred
+/// @param liquidity The usable liquidity
+/// @param amountRemaining How much input or output amount is remaining to be swapped in/out
+/// @param feePips The fee taken from the input amount, expressed in hundredths of a bip
+/// @return sqrtRatioNextX96 The price after swapping the amount in/out, not to exceed the price target
+/// @return amountIn The amount to be swapped in, of either token0 or token1, based on the direction of the swap
+/// @return amountOut The amount to be received, of either token0 or token1, based on the direction of the swap
+/// @return feeAmount The amount of input that will be taken as a fee
+view swapMathComputeSwapStep(
+    /* uint160 */ sqrtRatioCurrentX96: nat,
+    /* uint160 */ sqrtRatioTargetX96: nat,
+    /* uint128 */ liquidity_swapMathComputeSwapStep: nat,
+    /* int256 */ amountRemaining: int,
+    /* uint24 */ feePips: nat
+) : nat * nat * nat * nat
+    /* sqrtRatioNextX96, */
+    /* amountIn, */
+    /* amountOut, */
+    /* feeAmount */
+{
+    var zeroForOne: bool = sqrtRatioCurrentX96 >= sqrtRatioTargetX96;
+    var exactIn: bool = amountRemaining >= 0;
+    var sqrtRatioNextX96: nat = 0;
+    var amountIn: nat = 0;
+    var amountOut: nat = 0;
+    var feeAmount: nat = 0;
+
+    if exactIn then begin
+        const amountRemainingLessFee: nat ?= int_to_nat(abs(amountRemaining) * (1_000_000 - feePips) div 1_000_000) : INVALID_NAT;
+        amountIn := zeroForOne
+            ? sqrtPriceMathGetAmount0Delta_round(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, true)
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity_swapMathComputeSwapStep, true);
+        if (amountRemainingLessFee >= amountIn) then
+            sqrtRatioNextX96 := sqrtRatioTargetX96
+        else
+            sqrtRatioNextX96 := sqrtPriceMathGetNextSqrtPriceFromInput(
+                sqrtRatioCurrentX96,
+                liquidity_swapMathComputeSwapStep,
+                amountRemainingLessFee,
+                zeroForOne
+            );
+    end else begin
+        amountOut := zeroForOne
+            ? sqrtPriceMathGetAmount1Delta_round(sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, false)
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity_swapMathComputeSwapStep, false);
+        if (abs(amountRemaining) >= amountOut) then
+            sqrtRatioNextX96 := sqrtRatioTargetX96
+        else
+            sqrtRatioNextX96 := sqrtPriceMathGetNextSqrtPriceFromOutput(
+                sqrtRatioCurrentX96,
+                liquidity_swapMathComputeSwapStep,
+                abs(amountRemaining),
+                zeroForOne
+            )
+    end;
+
+    const max_Val: bool = (sqrtRatioTargetX96 = sqrtRatioNextX96);
+
+    // get the input/output amounts
+    if (zeroForOne) then begin
+        amountIn := (max_Val and exactIn)
+            ? amountIn
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioNextX96, sqrtRatioCurrentX96, liquidity, true);
+        amountOut := (max_Val and (exactIn = false))
+            ? amountOut
+            : sqrtPriceMathGetAmount1Delta_round(sqrtRatioNextX96, sqrtRatioCurrentX96, liquidity, false)
+    end else begin
+        amountIn := (max_Val and exactIn)
+            ? amountIn
+            : sqrtPriceMathGetAmount1Delta_round(sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity, true);
+        amountOut := (max_Val and (exactIn = false))
+            ? amountOut
+            : sqrtPriceMathGetAmount0Delta_round(sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity, false)
+    end;
+
+    // cap the output amount to not exceed the remaining output amount
+    if ((exactIn = false) and (amountOut > abs(amountRemaining))) then
+        amountOut := abs(amountRemaining);
+
+    if (exactIn and sqrtRatioNextX96 <> sqrtRatioTargetX96) then
+        // we didn't reach the target, so take the remainder of the maximum input as fee
+        feeAmount ?:= int_to_nat(abs(amountRemaining) - amountIn) : INVALID_NAT
+    else 
+        feeAmount := abs(ceil(amountIn * feePips / (1_000_000 - feePips)));
+
+    return ((sqrtRatioNextX96, amountIn, amountOut, feeAmount))
+}

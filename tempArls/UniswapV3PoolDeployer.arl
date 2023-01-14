@@ -1,8 +1,8 @@
 
-archetype UniswapV3PoolDeployer
+archetype kodexV3PoolDeployer
 
-// import IUniswapV3PoolDeployer from "./interfaces/IUniswapV3PoolDeployer.tz"
-// import UniswapV3Pool from "./UniswapV3Pool.tz"
+// import IkodexV3PoolDeployer from "./interfaces/IkodexV3PoolDeployer.tz"
+// import kodexV3Pool from "./kodexV3Pool.tz"
 
 asset parameters {
     factory: address;

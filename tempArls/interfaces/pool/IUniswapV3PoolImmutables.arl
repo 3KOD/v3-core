@@ -1,5 +1,5 @@
 
-archetype IUniswapV3PoolImmutables
+archetype IkodexV3PoolImmutables
 
 view factory(): address {};
 view token0(): address {};

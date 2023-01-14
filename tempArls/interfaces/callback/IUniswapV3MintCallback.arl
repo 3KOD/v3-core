@@ -1,5 +1,5 @@
 
-archetype IUniswapV3MintCallback
+archetype IkodexV3MintCallback
 
-entry uniswapV3MintCallback(amount0Owed: nat, amount1Owed: nat, data: bytes);
+entry kodexV3MintCallback(amount0Owed: nat, amount1Owed: nat, data: bytes);
 
