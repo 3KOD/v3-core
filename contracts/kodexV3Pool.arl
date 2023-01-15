@@ -220,6 +220,14 @@ asset observations identified by observation_key to big_map {
     observation_value: Observation;
 }
 
+view getObservation(id: nat): Observation {
+    return observations[id].observation_value
+}
+
+view getTickBitmap(id: int): nat {
+    return tickBitmap[id].tickSpacing_tickBmp
+}
+
 /// @dev Prevents calling a function from anyone except the address returned by IkodexV3Factory#owner()
 function onlyFactoryOwner(): bool {
     const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : "ERR";
@@ -478,6 +486,8 @@ entry mint(
     end;
 
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(kodexV3lib, "getFeeGrowthInside", (
+        ticks[tickLower_mint].info,
+        ticks[tickUpper_mint].info,        
         tickLower_mint,
         tickUpper_mint,
         slot0_.tick,
@@ -756,6 +766,8 @@ entry burn(
     end;
 
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(kodexV3lib, "getFeeGrowthInside", (
+        ticks[tickLower_burn].info,
+        ticks[tickUpper_burn].info,
         tickLower_burn,
         tickUpper_burn,
         slot0_.tick,
@@ -979,6 +991,7 @@ entry swap(
         step.sqrtPriceStartX96_stepComputations := state_swap_param.sqrtPriceX96_swapState;
 
         const retVal ?= call_view<int * bool>(kodexV3lib, "tickBmpNextInitTickWithOneW", (
+            self_address,
             state_swap_param.tick_swapState,
             tickSpacing,
             zeroForOne
