@@ -1,9 +1,8 @@
 // owner = caller
-archetype kodexV3Factory(owner: address)
+archetype kodexV3Factory(owner: address, const KODEX_V3_LIB: address)
 
 import kodexV3Pool from "./contracts/michelson/kodexV3Pool.tz"
 
-constant kodexV3lib: address = KT1TsgES94mnN4BV7yGe1mzVZYBxGDKhtcsX
 constant INVALID_OPERATION: string = "INVALID"
 constant MIN_TICK: int = -887272
 constant MAX_TICK: int = -MIN_TICK
@@ -97,7 +96,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
             (big_map<(address * int * int), (nat * (nat * nat) * nat * nat)>) * 
             (big_map<nat, (nat * int * nat * bool)>)
         ) = 
-            (self_address, token0_cp, token1_cp, kodexV3lib, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
+            (self_address, token0_cp, token1_cp, KODEX_V3_LIB, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
         const op_addr : (operation * address) = create_contract(kodexV3Pool, none, amount, storage_init);
         operations := [op_addr[0]];
 
