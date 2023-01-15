@@ -3,8 +3,10 @@ archetype kodexV3Factory(owner: address)
 
 import kodexV3Pool from "./contracts/michelson/kodexV3Pool.tz"
 
-constant TickMathMIN_TICK: int = -887272
-constant TickMathMAX_TICK: int = -TickMathMIN_TICK
+constant kodexV3lib: address = KT1TsgES94mnN4BV7yGe1mzVZYBxGDKhtcsX
+constant INVALID_OPERATION: string = "INVALID"
+constant MIN_TICK: int = -887272
+constant MAX_TICK: int = -MIN_TICK
 constant Q128: nat = 1 <<| 128
 constant original: address = self_address
 
@@ -57,8 +59,8 @@ function noDelegateCall() : bool {
 }
 
 function tickSpacingToMaxLiquidityPerTick(tickSpacing_: int): nat {
-    var minTick = (TickMathMIN_TICK div tickSpacing_) * tickSpacing_;
-    var maxTick = (TickMathMAX_TICK div tickSpacing_) * tickSpacing_;
+    var minTick = (MIN_TICK div tickSpacing_) * tickSpacing_;
+    var maxTick = (MAX_TICK div tickSpacing_) * tickSpacing_;
     var numTicks: int = (maxTick - minTick) div tickSpacing_ + 1;
     var retVal = int_to_nat((Q128 - 1) div numTicks) ? the : 0;
     return retVal
@@ -86,7 +88,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
 
         const storage_init : 
         (
-            address * address * address * nat * int * nat * nat * nat * 
+            address * address * address * address * string * nat * int * nat * nat * nat * 
             (nat * int * nat * nat * nat * nat * bool) * 
             nat * nat * 
             (nat * nat) * nat * 
@@ -95,7 +97,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
             (big_map<(address * int * int), (nat * (nat * nat) * nat * nat)>) * 
             (big_map<nat, (nat * int * nat * bool)>)
         ) = 
-            (self_address, token0_cp, token1_cp, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
+            (self_address, token0_cp, token1_cp, kodexV3lib, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
         const op_addr : (operation * address) = create_contract(kodexV3Pool, none, amount, storage_init);
         operations := [op_addr[0]];
 
