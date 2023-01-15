@@ -103,11 +103,11 @@ record Observation {
     initialized_Obs: bool;
 } as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
 
-view tickSpacingToMaxLiquidityPerTick(tickSpacing_: int): nat {
-    var minTick = (MIN_TICK div tickSpacing_) * tickSpacing_;
-    var maxTick = (MAX_TICK div tickSpacing_) * tickSpacing_;
-    var numTicks: int = (maxTick - minTick) div tickSpacing_ + 1;
-    var retVal = int_to_nat((Q128 - 1) div numTicks) ? the : 0;
+view tickSpacingToMaxLpPerTick(tickSpacing_: int): nat {
+    const minTick = (MIN_TICK div tickSpacing_) * tickSpacing_;
+    const maxTick = (MAX_TICK div tickSpacing_) * tickSpacing_;
+    const numTicks: int = (maxTick - minTick) div tickSpacing_ + 1;
+    const retVal = int_to_nat((Q128 - 1) div numTicks) ? the : 0;
     return retVal
 }
 
@@ -558,7 +558,7 @@ view getFeeGrowthInside(
 /// @param liquidity The amount of usable liquidity
 /// @param roundUp_sPMGA0D Whether to round the amount up or down
 /// @return amount0 Amount of token0 required to cover a position of size liquidity between the two passed prices
-view sqrtPriceMathGetAmount0Delta_round(
+view sqrtPriceMathGetAmount0D_rd(
     sqrtRatioAX96_sPMGA0D: nat,
     sqrtRatioBX96_sPMGA0D: nat,
     liquidity_sPMGA0D: nat,
@@ -598,14 +598,14 @@ view sqrtPriceMathGetAmount0Delta(
     if (liquidity_sPMGA0D < 0) then begin
         const retVal ?= call_view<int>(
             self_address, 
-            "sqrtPriceMathGetAmount0Delta_round", 
+            "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), false)
         ) : INVALID_OPERATION;
         return (-retVal)
     end else begin
         const retVal ?= call_view<int>(
             self_address, 
-            "sqrtPriceMathGetAmount0Delta_round", 
+            "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), true)
         ) : INVALID_OPERATION;
         return retVal
@@ -619,7 +619,7 @@ view sqrtPriceMathGetAmount0Delta(
 /// @param liquidity_sPMGA1D The amount of usable liquidity_sPMGA1D
 /// @param roundUp_sPMGA1D Whether to round the amount up, or down
 /// @return amount1 Amount of token1 required to cover a position of size liquidity_sPMGA1D between the two passed prices
-view sqrtPriceMathGetAmount1Delta_round(
+view sqrtPriceMathGetAmount1D_rd(
     sqrtRatioAX96_sPMGA1D: nat,
     sqrtRatioBX96_sPMGA1D: nat,
     liquidity_sPMGA1D: nat,
@@ -655,14 +655,14 @@ view sqrtPriceMathGetAmount1Delta(
     if liquidity_sPMGA1D < 0 then begin
         const retVal ?= call_view<int>(
             self_address, 
-            "sqrtPriceMathGetAmount1Delta_round", 
+            "sqrtPriceMathGetAmount1D_rd", 
             (sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), false)
         ) : INVALID_OPERATION;
         return (-retVal)
     end else begin
         const retVal ?= call_view<int>(
             self_address, 
-            "sqrtPriceMathGetAmount1Delta_round", 
+            "sqrtPriceMathGetAmount1D_rd", 
             (sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), true)
         ) : INVALID_OPERATION;
         return retVal
@@ -832,7 +832,7 @@ view tickBmpNextInitTickWithOneW(
 /// @param amount How much of token0 to add or remove from virtual reserves
 /// @param add Whether to add or remove the amount of token0
 /// @return The price after adding or removing amount, depending on add
-view sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(
+view sqrtPMathGetNSqrtPFromA0RUp(
     /* uint160 */ sqrtPX96_sqrtPMGNSPFromA0RU: nat,
     /* uint128 */ liquidity_sqrtPMGNSPFromA0RU: nat,
     /* uint256 */ amount_sqrtPMGNSPFromA0RU: nat,
@@ -876,7 +876,7 @@ view sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(
 /// @param amount How much of token1 to add, or remove, from virtual reserves
 /// @param add Whether to add, or remove, the amount of token1
 /// @return The price after adding or removing `amount`
-view sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(
+view sqrtPMathGetNSqrtPFromA1RDown(
     /* uint160 */ sqrtPX96_sqrtPMGNSPFromA1RD: nat,
     /* uint128 */ liquidity_sqrtPMGNSPFromA1RD: nat,
     /* uint256 */ amount_sqrtPMGNSPFromA1RD: nat,
@@ -913,7 +913,7 @@ view sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(
 /// @param amountIn How much of token0, or token1, is being swapped in
 /// @param zeroForOne Whether the amount in is token0 or token1
 /// @return sqrtQX96 The price after adding the input amount to token0 or token1
-view sqrtPriceMathGetNextSqrtPriceFromInput(
+view sqrtPMathGetNSqrtPFromIn(
     /* uint160 */ sqrtPX96_sqrlPriceMathGNSPFI: nat,
     /* uint128 */ liquidity_sqrlPriceMathGNSPFI: nat,
     /* uint256 */ amountIn_sqrlPriceMathGNSPFI: nat,
@@ -928,12 +928,12 @@ view sqrtPriceMathGetNextSqrtPriceFromInput(
 
     const retVal_option1 ?= call_view<nat>(
         self_address, 
-        "sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp", 
+        "sqrtPMathGetNSqrtPFromA0RUp", 
         (sqrtPX96_sqrlPriceMathGNSPFI, liquidity_sqrlPriceMathGNSPFI, amountIn_sqrlPriceMathGNSPFI, true)): INVALID_OPERATION;
     
     const retVal_option2 ?= call_view<nat>(
         self_address,
-        "sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown",
+        "sqrtPMathGetNSqrtPFromA1RDown",
         (sqrtPX96_sqrlPriceMathGNSPFI, liquidity_sqrlPriceMathGNSPFI, amountIn_sqrlPriceMathGNSPFI, true)): INVALID_OPERATION;
 
     const retVal: nat = zeroForOne_sqrlPriceMathGNSPFI ? retVal_option1 : retVal_option2;
@@ -948,7 +948,7 @@ view sqrtPriceMathGetNextSqrtPriceFromInput(
 /// @param amountOut How much of token0, or token1, is being swapped out
 /// @param zeroForOne Whether the amount out is token0 or token1
 /// @return sqrtQX96 The price after removing the output amount of token0 or token1
-view sqrtPriceMathGetNextSqrtPriceFromOutput(
+view sqrtPMathGetNSqrtPFromOut(
     /* uint160 */ sqrtPX96_sqrlPriceMathGNSPFO: nat,
     /* uint128 */ liquidity_sqrlPriceMathGNSPFO: nat,
     /* uint256 */ amountOut_sqrlPriceMathGNSPFO: nat,
@@ -962,12 +962,12 @@ view sqrtPriceMathGetNextSqrtPriceFromOutput(
     // round to make sure that we pass the target price
     const retVal_option1 ?= call_view<nat>(
         self_address, 
-        "sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown", 
+        "sqrtPMathGetNSqrtPFromA1RDown", 
         (sqrtPX96_sqrlPriceMathGNSPFO, liquidity_sqrlPriceMathGNSPFO, amountOut_sqrlPriceMathGNSPFO, false)): INVALID_OPERATION;
 
     const retVal_option2 ?= call_view<nat>(
         self_address, 
-        "sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp", 
+        "sqrtPMathGetNSqrtPFromA0RUp", 
         (sqrtPX96_sqrlPriceMathGNSPFO, liquidity_sqrlPriceMathGNSPFO, amountOut_sqrlPriceMathGNSPFO, false)): INVALID_OPERATION;
 
 
@@ -1006,11 +1006,11 @@ view swapMathComputeSwapStep(
         const amountRemainingLessFee: nat ?= int_to_nat(abs(amountRemaining) * (1_000_000 - feePips) div 1_000_000) : INVALID_OPERATION;
         const amountIn_option1 ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount0Delta_round", 
+            "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, true)): INVALID_OPERATION;
         const amountIn_option2 ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount0Delta_round", 
+            "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity_swapMathComputeSwapStep, true)): INVALID_OPERATION;
         
         amountIn := zeroForOne ? amountIn_option1 : amountIn_option2;
@@ -1019,16 +1019,16 @@ view swapMathComputeSwapStep(
         else
             sqrtRatioNextX96 ?:= call_view<nat>(
                 self_address, 
-                "sqrtPriceMathGetNextSqrtPriceFromInput", 
+                "sqrtPMathGetNSqrtPFromIn", 
                 (sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, amountRemainingLessFee, zeroForOne)): INVALID_OPERATION;
     end else begin
         const amountOut_option1 ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount1Delta_round", 
+            "sqrtPriceMathGetAmount1D_rd", 
             (sqrtRatioTargetX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, false)): INVALID_OPERATION;
         const amountOut_option2 ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount0Delta_round", 
+            "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioCurrentX96, sqrtRatioTargetX96, liquidity_swapMathComputeSwapStep, false)): INVALID_OPERATION;
         
         amountOut := zeroForOne ? amountOut_option1 : amountOut_option2;
@@ -1037,7 +1037,7 @@ view swapMathComputeSwapStep(
         else
             sqrtRatioNextX96 ?:= call_view<nat>(
                 self_address, 
-                "sqrtPriceMathGetNextSqrtPriceFromOutput", 
+                "sqrtPMathGetNSqrtPFromOut", 
                 (sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, abs(amountRemaining), zeroForOne)): INVALID_OPERATION;
     end;
 
@@ -1047,26 +1047,26 @@ view swapMathComputeSwapStep(
     if (zeroForOne) then begin
         const amountIn_option ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount0Delta_round", 
+            "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioNextX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, true)
         ): INVALID_OPERATION;
         amountIn := (max_Val and exactIn) ? amountIn : amountIn_option;
         const amountOut_option ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount1Delta_round", 
+            "sqrtPriceMathGetAmount1D_rd", 
             (sqrtRatioNextX96, sqrtRatioCurrentX96, liquidity_swapMathComputeSwapStep, false)
         ): INVALID_OPERATION;
         amountOut := (max_Val and (exactIn = false)) ? amountOut : amountOut_option
     end else begin
         const amountIn_option ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount1Delta_round", 
+            "sqrtPriceMathGetAmount1D_rd", 
             (sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity_swapMathComputeSwapStep, true)
         ): INVALID_OPERATION;
         amountIn := (max_Val and exactIn) ? amountIn : amountIn_option;
         const amountOut_option ?= call_view<nat>(
             self_address, 
-            "sqrtPriceMathGetAmount0Delta_round", 
+            "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioCurrentX96, sqrtRatioNextX96, liquidity_swapMathComputeSwapStep, false)
         ): INVALID_OPERATION;
         amountOut := (max_Val and (exactIn = false)) ? amountOut : amountOut_option
