@@ -16,7 +16,6 @@ constant Q128: nat = 1 <<| 128
 constant Q160: nat = 1 <<| 160
 constant Q256: nat = 1 <<| 256
 constant UNIX_START_TIME: date = 1970-01-01
-constant original: address = self_address
 
 record PoolKey {
     token0_poolKey: address;
@@ -1083,4 +1082,86 @@ view swapMathComputeSwapStep(
         feeAmount := abs(ceil(amountIn * feePips / (1_000_000 - feePips)));
 
     return ((sqrtRatioNextX96, amountIn, amountOut, feeAmount))
+}
+
+/// @inheritdoc IkodexV3PoolDerivedState
+view snapshotCumulativesInside(lower: TickInfo, upper: TickInfo, tickLower: int, tickUpper: int, slot0: Slot0, liquidity: nat): int * nat * nat
+{
+    do_require(tickLower < tickUpper, "TLU");
+    do_require(tickLower >= MIN_TICK, "TLM");
+    do_require(tickUpper <= MAX_TICK, "TUM");
+
+    var tickCumulativeInside: int = 0;
+    var secondsPerLiquidityInsideX128: nat = 0;
+    var secondsInside: nat = 0;
+
+    var tickCumulativeLower: int = 0;
+    var tickCumulativeUpper: int = 0;
+    var secondsPerLiquidityOutsideLowerX128: nat = 0;
+    var secondsPerLiquidityOutsideUpperX128: nat = 0;
+    var secondsOutsideLower: nat = 0;
+    var secondsOutsideUpper: nat = 0;
+
+    tickCumulativeLower := lower.tickCumulativeOutside;
+    secondsPerLiquidityOutsideLowerX128 := lower.secondsPerLiquidityOutsideX128;
+    secondsOutsideLower :=  lower.secondsOutside;
+    do_require(lower.%initialized, "ERR");
+
+    tickCumulativeUpper := upper.tickCumulativeOutside;
+    secondsPerLiquidityOutsideUpperX128 := upper.secondsPerLiquidityOutsideX128;
+    secondsOutsideUpper := upper.secondsOutside;
+    do_require(upper.%initialized, "ERR");
+
+    if (slot0.tick < tickLower) then begin
+        tickCumulativeInside := tickCumulativeLower - tickCumulativeUpper;
+        secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128) : INVALID_OPERATION;
+        secondsInside ?:= int_to_nat(secondsOutsideLower - secondsOutsideUpper) : INVALID_OPERATION;
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end else if (slot0.tick < tickUpper) then begin
+        var time ?= call_view<nat>(self_address, "blockTimestamp_", Unit) : INVALID_OPERATION;
+        const retVal ?= call_view<int * nat>(self_address, "observationsObserveSingle", (
+            self_address,
+            time,
+            0,
+            slot0.tick,
+            slot0.observationIndex,
+            liquidity,
+            slot0.observationCardinality
+        )) : INVALID_OPERATION;
+        const tickCumulative: int = retVal[0];
+        const secondsPerLiquidityCumulativeX128: nat = retVal[1];
+        tickCumulativeInside := tickCumulative - tickCumulativeLower - tickCumulativeUpper;
+        secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityCumulativeX128 - secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128) : INVALID_OPERATION;
+        secondsInside ?:= int_to_nat(time - secondsOutsideLower - secondsOutsideUpper) : INVALID_OPERATION;
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end else begin
+        tickCumulativeInside := tickCumulativeUpper - tickCumulativeLower;
+        secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideUpperX128 - secondsPerLiquidityOutsideLowerX128) : INVALID_OPERATION;
+        secondsInside ?:= int_to_nat(secondsOutsideUpper - secondsOutsideLower) : INVALID_OPERATION;
+        return ((tickCumulativeInside, secondsPerLiquidityInsideX128, secondsInside))
+    end
+}
+
+/// @inheritdoc IkodexV3PoolDerivedState
+view observe(secondsAgos: list<nat>, slot0: Slot0, liquidity: nat) : list<int> * list<nat> {
+    do_require(slot0.observationCardinality > 0, "I");
+
+    const time_val ?= call_view<nat>(self_address, "blockTimestamp_", Unit) : INVALID_OPERATION;
+    var tickCumulatives: list<int> = [];
+    var secondsPerLiquidityCumulativeX128s: list<nat> = [];
+    var i = 0;
+    while (i < length(secondsAgos)) do
+        const retVal ?= call_view<int * nat>(self_address, "observationsObserveSingle", (
+            time_val,
+            (nth(secondsAgos, i) ? the : 0),
+            slot0.tick,
+            slot0.observationIndex,
+            liquidity,
+            slot0.observationCardinality
+        )) : INVALID_OPERATION;
+        tickCumulatives := concat(tickCumulatives, [retVal[0]]);
+        secondsPerLiquidityCumulativeX128s := concat(secondsPerLiquidityCumulativeX128s, [retVal[1]]);
+        i += 1
+    done;
+    return ((tickCumulatives, secondsPerLiquidityCumulativeX128s))
 }
