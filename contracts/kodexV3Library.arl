@@ -361,8 +361,8 @@ view binarySearch(
         else begin
             atOrAfter ?:= call_view<Observation>(poolAddress, "getObservation", ((i + 1) % cardinality_binarySearch)) : INVALID_OPERATION;
 
-            var targetAtOrAfter ?= call_view<bool>(poolAddress, "lte_tickBmpNITWOW", (time_binarySearch, beforeOrAt.blockTimestamp_Obs, target_binarySearch)) : INVALID_OPERATION;
-            const cond_val ?= call_view<bool>(poolAddress, "lte_tickBmpNITWOW", (time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) : INVALID_OPERATION;
+            var targetAtOrAfter ?= call_view<bool>(self_address, "lte_tickBmpNITWOW", (time_binarySearch, beforeOrAt.blockTimestamp_Obs, target_binarySearch)) : INVALID_OPERATION;
+            const cond_val ?= call_view<bool>(self_address, "lte_tickBmpNITWOW", (time_binarySearch, target_binarySearch, atOrAfter.blockTimestamp_Obs)) : INVALID_OPERATION;
 
             // check if we've found the answer!
             if (targetAtOrAfter and cond_val) then
@@ -454,6 +454,7 @@ view getSurroundingObservations(
 }
 
 view observationsObserveSingle(
+    poolAddress: address,
     time_observeSingle: nat,
     secondsAgo_observeSingle: nat,
     tick_observeSingle: int,
@@ -473,6 +474,7 @@ view observationsObserveSingle(
         var target ?= int_to_nat(time_observeSingle - secondsAgo_observeSingle) : INVALID_OPERATION;
 
         const retVal ?= call_view<Observation * Observation>(self_address, "getSurroundingObservations", (
+            poolAddress,
             time_observeSingle,
             target,
             tick_observeSingle,

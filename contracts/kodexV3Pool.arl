@@ -277,6 +277,7 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
     end else if (slot0_.tick < tickUpper) then begin
         var time ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
         const retVal ?= call_view<int * nat>(kodexV3lib, "observationsObserveSingle", (
+            self_address,
             time,
             0,
             slot0_.tick,
@@ -401,6 +402,7 @@ entry mint(
         const time ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
         
         const retVal : (int * nat) ?= call_view<(int * nat)>(kodexV3lib, "observationsObserveSingle", (
+            self_address,
             time,
             0,
             slot0.tick,
@@ -673,6 +675,7 @@ entry burn(
         const time ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
         
         const retVal : (int * nat) ?= call_view<(int * nat)>(kodexV3lib, "observationsObserveSingle", (
+            self_address,
             time,
             0,
             slot0.tick,
@@ -1053,6 +1056,7 @@ entry swap(
                 // crosses an initialized tick
                 if (cache.computedLatestObservation_swapCache = false) then begin
                     const retVal_observationsObserveSingle : (int * nat) ?= call_view<(int * nat)>(kodexV3lib, "observationsObserveSingle", (
+                        self_address,
                         cache.blockTimestamp_swapCache,
                         0,
                         slot0Start.tick,
