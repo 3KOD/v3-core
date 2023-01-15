@@ -52,58 +52,40 @@ record Parameters {
     para_tickSpacing: int;
 }
 
-function noDelegateCall() : bool {
-    do_fail_if(self_address <> original, ("DelegateCall", original));
-    return true
-}
-
-function tickSpacingToMaxLiquidityPerTick(tickSpacing_: int): nat {
-    var minTick = (MIN_TICK div tickSpacing_) * tickSpacing_;
-    var maxTick = (MAX_TICK div tickSpacing_) * tickSpacing_;
-    var numTicks: int = (maxTick - minTick) div tickSpacing_ + 1;
-    var retVal = int_to_nat((Q128 - 1) div numTicks) ? the : 0;
-    return retVal
-}
-
 entry createPool(tokenA: address, tokenB: address, fee_: nat) {
-    require {
-        createPool1: noDelegateCall();
-        createPool2: tokenA <> tokenB;
-    }
+    do_require(self_address = original, "DCall");
+    do_require(tokenA <> tokenB, "ERR");
+    var token0_cp = tokenA < tokenB ? tokenA : tokenB;
+    var token1_cp = tokenA < tokenB ? tokenB : tokenA;
+    // do_require(token0_cp <> none, ("INVALID_ADDRESS", token0_cp));
+    var tickSpacing_cp = feeAmountTickSpacing[fee_].tickSpacing;
+    do_require(tickSpacing_cp <> 0, ("INVALID_TICK_SPACING", tickSpacing_cp));
+    do_require(is_none(getPool[(token0_cp, token1_cp, fee_)]?.pool), ("INVALID_GET_POOL", getPool[(token0_cp, token1_cp, fee_)].pool));
 
-    effect {
-        var token0_cp = tokenA < tokenB ? tokenA : tokenB;
-        var token1_cp = tokenA < tokenB ? tokenB : tokenA;
-        // do_require(token0_cp <> none, ("INVALID_ADDRESS", token0_cp));
-        var tickSpacing_cp = feeAmountTickSpacing[fee_].tickSpacing;
-        do_require(tickSpacing_cp <> 0, ("INVALID_TICK_SPACING", tickSpacing_cp));
-        do_require(is_none(getPool[(token0_cp, token1_cp, fee_)]?.pool), ("INVALID_GET_POOL", getPool[(token0_cp, token1_cp, fee_)].pool));
+    // /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
+    // /// clearing it after deploying the pool.
+    const amount : tez = 0tz;
+    const maxLiquidityPerTick : nat ?= call_view<nat>(KODEX_V3_LIB, "tickSpacingToMaxLpPerTick", tickSpacing_cp) : INVALID_OPERATION;
+    const slot0 : (nat * int * nat * nat * nat * nat * bool) = (0, 0, 0, 0, 0, 0, false);
 
-        // /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
-        // /// clearing it after deploying the pool.
-        const amount : tez = 0tz;
-        const maxLiquidityPerTick : nat = tickSpacingToMaxLiquidityPerTick(tickSpacing_cp);
-        const slot0 : (nat * int * nat * nat * nat * nat * bool) = (0, 0, 0, 0, 0, 0, false);
+    const storage_init : 
+    (
+        address * address * address * address * string * nat * int * nat * nat * nat * 
+        (nat * int * nat * nat * nat * nat * bool) * 
+        nat * nat * 
+        (nat * nat) * nat * 
+        (big_map<int, (nat * int * nat * nat * int * nat * nat * bool)>) * 
+        (big_map<int, nat>) * 
+        (big_map<(address * int * int), (nat * (nat * nat) * nat * nat)>) * 
+        (big_map<nat, (nat * int * nat * bool)>)
+    ) = 
+        (self_address, token0_cp, token1_cp, KODEX_V3_LIB, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
+    const op_addr : (operation * address) = create_contract(kodexV3Pool, none, amount, storage_init);
+    operations := [op_addr[0]];
 
-        const storage_init : 
-        (
-            address * address * address * address * string * nat * int * nat * nat * nat * 
-            (nat * int * nat * nat * nat * nat * bool) * 
-            nat * nat * 
-            (nat * nat) * nat * 
-            (big_map<int, (nat * int * nat * nat * int * nat * nat * bool)>) * 
-            (big_map<int, nat>) * 
-            (big_map<(address * int * int), (nat * (nat * nat) * nat * nat)>) * 
-            (big_map<nat, (nat * int * nat * bool)>)
-        ) = 
-            (self_address, token0_cp, token1_cp, KODEX_V3_LIB, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
-        const op_addr : (operation * address) = create_contract(kodexV3Pool, none, amount, storage_init);
-        operations := [op_addr[0]];
-
-        getPool[(token0_cp, token1_cp, fee_)].pool := op_addr[1];
-        getPool[(token1_cp, token0_cp, fee_)].pool := op_addr[1];
-        emit<PoolCreated>({token0_cp; token1_cp; fee_; tickSpacing_cp; op_addr[1]})
-    }
+    getPool[(token0_cp, token1_cp, fee_)].pool := op_addr[1];
+    getPool[(token1_cp, token0_cp, fee_)].pool := op_addr[1];
+    emit<PoolCreated>({token0_cp; token1_cp; fee_; tickSpacing_cp; op_addr[1]})
 }
 
 entry setOwner(owner_: address) {
