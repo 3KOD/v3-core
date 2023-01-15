@@ -445,6 +445,8 @@
                          PAIR;
                          DUP 3;
                          PAIR;
+                         SELF_ADDRESS;
+                         PAIR;
                          VIEW "observationsObserveSingle" (pair int nat);
                          IF_NONE
                            { DUP 18;
@@ -1049,6 +1051,26 @@
                      DUP 12;
                      PAIR;
                      DUP 13;
+                     PAIR;
+                     DUP 30;
+                     DUP 13;
+                     GET;
+                     IF_NONE
+                       { PUSH string "ticks";
+                         PUSH string "ASSET_NOT_FOUND";
+                         PAIR;
+                         FAILWITH }
+                       {  };
+                     PAIR;
+                     DUP 30;
+                     DUP 14;
+                     GET;
+                     IF_NONE
+                       { PUSH string "ticks";
+                         PUSH string "ASSET_NOT_FOUND";
+                         PAIR;
+                         FAILWITH }
+                       {  };
                      PAIR;
                      VIEW "getFeeGrowthInside" (pair nat nat);
                      IF_NONE
@@ -2182,6 +2204,8 @@
                          PAIR;
                          DUP 3;
                          PAIR;
+                         SELF_ADDRESS;
+                         PAIR;
                          VIEW "observationsObserveSingle" (pair int nat);
                          IF_NONE
                            { DUP 16;
@@ -2900,6 +2924,26 @@
                      DUP 11;
                      PAIR;
                      DUP 12;
+                     PAIR;
+                     DUP 28;
+                     DUP 12;
+                     GET;
+                     IF_NONE
+                       { PUSH string "ticks";
+                         PUSH string "ASSET_NOT_FOUND";
+                         PAIR;
+                         FAILWITH }
+                       {  };
+                     PAIR;
+                     DUP 28;
+                     DUP 13;
+                     GET;
+                     IF_NONE
+                       { PUSH string "ticks";
+                         PUSH string "ASSET_NOT_FOUND";
+                         PAIR;
+                         FAILWITH }
+                       {  };
                      PAIR;
                      VIEW "getFeeGrowthInside" (pair nat nat);
                      IF_NONE
@@ -3776,6 +3820,8 @@
                             CDR;
                             CAR;
                             PAIR;
+                            SELF_ADDRESS;
+                            PAIR;
                             VIEW "tickBmpNextInitTickWithOneW" (pair int bool);
                             IF_NONE
                               { DUP 16;
@@ -4352,6 +4398,8 @@
                                         CDR;
                                         CDR;
                                         CAR;
+                                        PAIR;
+                                        SELF_ADDRESS;
                                         PAIR;
                                         VIEW "observationsObserveSingle" (pair int nat);
                                         IF_NONE
@@ -5923,6 +5971,44 @@
                      PAIR } } };
          DIP { DROP 2 } };
   view
+    "getObservation"
+    nat
+    (pair (nat %blockTimestamp) (pair (int %tickCumulative) (nat %secondsPerLiquidityCumulativeX128) (bool %initialized)))
+    { UNPAIR;
+      DIP { CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR };
+      UNIT;
+      DUP 3;
+      DUP 3;
+      GET;
+      IF_NONE
+        { PUSH string "observations";
+          PUSH string "ASSET_NOT_FOUND";
+          PAIR;
+          FAILWITH }
+        {  };
+      SWAP;
+      DROP;
+      DIP { DROP 2 } };
+  view
+    "getTickBitmap"
+    int
+    nat
+    { UNPAIR;
+      DIP { CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; UNPAIR; SWAP; DROP };
+      UNIT;
+      DUP 3;
+      DUP 3;
+      GET;
+      IF_NONE
+        { PUSH string "tickBitmap";
+          PUSH string "ASSET_NOT_FOUND";
+          PAIR;
+          FAILWITH }
+        {  };
+      SWAP;
+      DROP;
+      DIP { DROP 2 } };
+  view
     "snapshotCumulativesInside"
     (pair int int)
     (pair int nat nat)
@@ -6151,6 +6237,8 @@
               PUSH nat 0;
               PAIR;
               DUP 3;
+              PAIR;
+              SELF_ADDRESS;
               PAIR;
               VIEW "observationsObserveSingle" (pair int nat);
               IF_NONE
