@@ -89,8 +89,10 @@ record PoolKey {
 } as (((token0, token1), fee))
 
 record MintCallbackData {
-    poolKey: PoolKey;
-    payer: address; 
+    poolKey_MintData: PoolKey;
+    payer_MintData: address;
+    amount0Min_MintData: nat;
+    amount1Min_MintData: nat;
 }
 
 record SwapCallbackData {
@@ -226,6 +228,14 @@ view getObservation(id: nat): Observation {
 
 view getTickBitmap(id: int): nat {
     return tickBitmap[id].tickSpacing_tickBmp
+}
+
+view getSlot0(): Slot0 {
+    return slot0
+}
+
+view getPositionInfo(owner_param: address, tickLower_param: int, tickUpper_param: int): PositionInfo {
+    return positions[(owner_param, tickLower_param, tickUpper_param)].positionInfo
 }
 
 /// @dev Prevents calling a function from anyone except the address returned by IkodexV3Factory#owner()
@@ -531,15 +541,22 @@ entry mint(
 
     const unpack_val : MintCallbackData ?= unpack<MintCallbackData>(data_mint) : INVALID_OPERATION; // TODO + please check amount amd amount_min slippage check
 
-    do_require(unpack_val.poolKey.token0_poolKey = token0, "ERR");
-    do_require(unpack_val.poolKey.token1_poolKey = token1, "ERR");
-    do_require(unpack_val.poolKey.fee_poolKey = fee, "ERR");
+    do_require(unpack_val.poolKey_MintData.token0_poolKey = token0, "ERR");
+    do_require(unpack_val.poolKey_MintData.token1_poolKey = token1, "ERR");
+    do_require(unpack_val.poolKey_MintData.fee_poolKey = fee, "ERR");
     
     balance0 += amount0_nat;
     balance1 += amount1_nat;
 
-    transfer 0tz to token0 call %transfer<address * address * nat>((unpack_val.payer, self_address, amount0_nat));
-    transfer 0tz to token1 call %transfer<address * address * nat>((unpack_val.payer, self_address, amount1_nat));
+    transfer 0tz to token0 call %transfer<address * address * nat>((unpack_val.payer_MintData, self_address, amount0_nat));
+    transfer 0tz to token1 call %transfer<address * address * nat>((unpack_val.payer_MintData, self_address, amount1_nat));
+
+    // Price slippage check
+    // require((amount0 >= params.amount0Min) and (amount1 >= params.amount1Min), "Price slippage check");
+    do_require(
+        (amount0_nat >= unpack_val.amount0Min_MintData) and (amount1_nat >= unpack_val.amount1Min_MintData), 
+        "Price slippage check"
+    );
 
     emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat});
     slot0.unlocked := true
@@ -1170,4 +1187,9 @@ entry collectProtocol(
 
     emit<CollectProtocol>({caller; recipient; amount0; amount1});
     slot0.unlocked := true
+}
+
+view burn_view(tickLower_burn: int, tickUpper_burn: int, amount_burn: nat): nat * nat {
+    const retVal ?= call_view<nat * nat>(kodexV3lib, "burn", (tickLower_burn, tickUpper_burn, amount_burn, slot0)): INVALID_OPERATION;
+    return retVal
 }

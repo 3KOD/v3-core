@@ -1165,3 +1165,64 @@ view observe(secondsAgos: list<nat>, slot0: Slot0, liquidity: nat) : list<int> *
     done;
     return ((tickCumulatives, secondsPerLiquidityCumulativeX128s))
 }
+
+/// @inheritdoc IkodexV3PoolActions
+view burn(
+    /* int24 */ tickLower_burn: int,
+    /* int24 */ tickUpper_burn: int,
+    /* uint128 */ amount_burn: nat,
+    slot0_: Slot0,
+): nat * nat
+{
+    do_require(slot0_.unlocked, "LOK");
+
+    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
+    do_require(checkTicks_retVal, "ERR");
+
+    var amount0: int = 0;
+    var amount1: int = 0;
+
+    if (amount_burn <> 0) then begin
+        if (slot0_.tick < tickLower_burn) then begin
+            // current tick is below the passed range; liquidity can only become in range by crossing from left to
+            // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
+            const sqrtPriceMathGetAmount0Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+            const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+            amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
+                sqrtPriceMathGetAmount0Delta_param0,
+                sqrtPriceMathGetAmount0Delta_param1,
+                amount_burn
+            )) : INVALID_OPERATION;
+        end else begin 
+            if (slot0_.tick < tickUpper_burn) then begin
+                // early return if we've already written an observation this block
+                const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+                amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
+                    slot0_.sqrtPriceX96,
+                    sqrtPriceMathGetAmount0Delta_param1,
+                    amount_burn
+                )) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+                amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
+                    sqrtPriceMathGetAmount1Delta_param0,
+                    slot0_.sqrtPriceX96,
+                    amount_burn
+                )) : INVALID_OPERATION
+            end else begin
+                // current tick is above the passed range; liquidity can only become in range by crossing from right to
+                // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+                amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
+                    sqrtPriceMathGetAmount1Delta_param0,
+                    sqrtPriceMathGetAmount1Delta_param1,
+                    amount_burn
+                )) : INVALID_OPERATION
+            end
+        end
+    end;
+
+    const amount0_nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
+    const amount1_nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
+    return ((amount0_nat, amount1_nat))
+}
