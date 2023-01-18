@@ -336,8 +336,8 @@ entry mint(
 
     var position = positions[(recipient_mint, tickLower_mint, tickUpper_mint)].positionInfo;
 
-    var feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
-    var feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
+    const feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
+    const feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
 
     // if we need to update the ticks, do it
     var flippedLower: bool = false;
@@ -616,8 +616,8 @@ entry burn(
 
     var position = positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo;
 
-    var feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
-    var feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
+    const feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
+    const feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
 
     // if we need to update the ticks, do it
     var flippedLower: bool = false;
@@ -1191,5 +1191,42 @@ entry collectProtocol(
 
 view burn_view(tickLower_burn: int, tickUpper_burn: int, amount_burn: nat): nat * nat {
     const retVal ?= call_view<nat * nat>(kodexV3lib, "burn", (tickLower_burn, tickUpper_burn, amount_burn, slot0)): INVALID_OPERATION;
+    return retVal
+}
+
+view burn_PositionInfo_view(tickLower_burn: int, tickUpper_burn: int, amount_burn: nat): nat * nat {
+    const retVal ?= call_view<nat * nat>(kodexV3lib, "burn_PositionInfo_view", (
+        tickLower_burn,
+        tickUpper_burn,
+        amount_burn,
+        slot0,
+        caller,
+        feeGrowthGlobal0X128,
+        feeGrowthGlobal1X128,
+        self_address,
+        ticks[tickUpper_burn].info,
+        ticks[tickLower_burn].info
+    )): INVALID_OPERATION;
+    return retVal
+}
+
+view mint_PositionInfo_view(
+    recipient_mint: address,
+    tickLower_mint: int,
+    tickUpper_mint: int,
+    amount_mint: nat
+) : PositionInfo {
+    const retVal ?= call_view<PositionInfo>(kodexV3lib, "mint", (
+        recipient_mint,
+        tickLower_mint,
+        tickUpper_mint,
+        amount_mint,
+        self_address,
+        slot0,
+        feeGrowthGlobal0X128,
+        feeGrowthGlobal1X128,
+        ticks[tickLower_mint].info,
+        ticks[tickUpper_mint].info
+    )): INVALID_OPERATION;
     return retVal
 }

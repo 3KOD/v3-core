@@ -1171,7 +1171,7 @@ view burn(
     /* int24 */ tickLower_burn: int,
     /* int24 */ tickUpper_burn: int,
     /* uint128 */ amount_burn: nat,
-    slot0_: Slot0,
+    slot0_: Slot0
 ): nat * nat
 {
     do_require(slot0_.unlocked, "LOK");
@@ -1225,4 +1225,180 @@ view burn(
     const amount0_nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
     const amount1_nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
     return ((amount0_nat, amount1_nat))
+}
+
+/// @inheritdoc IkodexV3PoolActions
+view burn_PositionInfo_view(
+    tickLower_burn: int,
+    tickUpper_burn: int,
+    amount_burn: nat,
+    slot0_: Slot0,
+    caller_address: address,
+    feeGrowthGlobal0X128_: nat,
+    feeGrowthGlobal1X128_: nat,
+    poolAddress: address,
+    info_flippedUpper: TickInfo,
+    info_flippedLower: TickInfo,
+) : PositionInfo
+{
+    do_require(slot0_.unlocked, "LOK");
+    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
+    do_require(checkTicks_retVal, "ERR");
+
+    var position ?= call_view<PositionInfo>(
+        poolAddress, 
+        "getPositionInfo", 
+        (caller_address, tickLower_burn, tickUpper_burn)
+    ): INVALID_OPERATION;
+
+    const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(self_address, "getFeeGrowthInside", (
+        info_flippedLower,
+        info_flippedUpper,
+        tickLower_burn,
+        tickUpper_burn,
+        slot0_.tick,
+        feeGrowthGlobal0X128_,
+        feeGrowthGlobal1X128_
+    )) : INVALID_OPERATION;
+
+    const feeGrowthInside0X128 = retVal_getFeeGrowthInside[0];
+    const feeGrowthInside1X128 = retVal_getFeeGrowthInside[1];
+
+    var liquidityNext = 0;
+    if (amount_burn = 0) then begin
+        do_require(position.liquidity_PosInfo > 0, "NP"); // disallow pokes for 0 liquidity positions
+        liquidityNext := position.liquidity_PosInfo
+    end else begin
+        liquidityNext := position.liquidity_PosInfo + amount_burn
+    end;
+
+    // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
+    var tokensOwed0: nat ?= int_to_nat((feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_OPERATION;
+    var tokensOwed1: nat ?= int_to_nat((feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_OPERATION;
+
+    // update the position
+    if (amount_burn <> 0) then position.liquidity_PosInfo := liquidityNext;
+    position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
+    position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
+    if ((tokensOwed0 > 0) or (tokensOwed1 > 0)) then begin
+        // overflow is acceptable, have to withdraw before you hit type(uint128).max fees
+        position.tokensOwed0_PosInfo += tokensOwed0;
+        position.tokensOwed1_PosInfo += tokensOwed1
+    end;
+    // }
+
+    var amount0: int = 0;
+    var amount1: int = 0;
+
+    if (amount_burn <> 0) then begin
+        if (slot0_.tick < tickLower_burn) then begin
+            // current tick is below the passed range; liquidity can only become in range by crossing from left to
+            // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
+            const sqrtPriceMathGetAmount0Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+            const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+            amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
+                sqrtPriceMathGetAmount0Delta_param0,
+                sqrtPriceMathGetAmount0Delta_param1,
+                amount_burn
+            )) : INVALID_OPERATION;
+        end else begin 
+            if (slot0_.tick < tickUpper_burn) then begin
+                const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+                amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
+                    slot0_.sqrtPriceX96,
+                    sqrtPriceMathGetAmount0Delta_param1,
+                    amount_burn
+                )) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+                amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
+                    sqrtPriceMathGetAmount1Delta_param0,
+                    slot0_.sqrtPriceX96,
+                    amount_burn
+                )) : INVALID_OPERATION;
+            end else begin
+                // current tick is above the passed range; liquidity can only become in range by crossing from right to
+                // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+                amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
+                    sqrtPriceMathGetAmount1Delta_param0,
+                    sqrtPriceMathGetAmount1Delta_param1,
+                    amount_burn
+                )) : INVALID_OPERATION
+            end
+        end
+    end;
+
+    const amount0_nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
+    const amount1_nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
+
+    if (amount0_nat > 0 or amount1_nat > 0) then begin
+        position.tokensOwed0_PosInfo := position.tokensOwed0_PosInfo + amount0_nat;
+        position.tokensOwed1_PosInfo := position.tokensOwed1_PosInfo + amount1_nat
+    end;
+
+    return position
+}
+
+view mint(
+    recipient_mint: address,
+    tickLower_mint: int,
+    tickUpper_mint: int,
+    amount_mint: nat,
+    poolAddress: address,
+    slot0_: Slot0,
+    feeGrowthGlobal0X128_: nat,
+    feeGrowthGlobal1X128_: nat,
+    info_flippedLower_: TickInfo,
+    info_flippedUpper_: TickInfo,
+) : PositionInfo
+{
+    do_require(slot0_.unlocked, "LOK");
+    do_require(amount_mint > 0, "ERR");
+
+    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_mint, tickUpper_mint)) : INVALID_OPERATION;
+    do_require(checkTicks_retVal, "ERR");
+
+    var position ?= call_view<PositionInfo>(
+        poolAddress, 
+        "getPositionInfo", 
+        (recipient_mint, tickLower_mint, tickUpper_mint)
+    ): INVALID_OPERATION;
+
+    const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(self_address, "getFeeGrowthInside", (
+        info_flippedLower_,
+        info_flippedUpper_,
+        tickLower_mint,
+        tickUpper_mint,
+        slot0_.tick,
+        feeGrowthGlobal0X128_,
+        feeGrowthGlobal1X128_
+    )) : INVALID_OPERATION;
+
+    const feeGrowthInside0X128 = retVal_getFeeGrowthInside[0];
+    const feeGrowthInside1X128 = retVal_getFeeGrowthInside[1];
+
+    var liquidityNext = 0;
+    if (amount_mint = 0) then begin
+        do_require(position.liquidity_PosInfo > 0, "NP"); // disallow pokes for 0 liquidity positions
+        liquidityNext := position.liquidity_PosInfo
+    end else begin
+        liquidityNext := position.liquidity_PosInfo + amount_mint
+    end;
+
+    // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
+    var tokensOwed0: nat ?= int_to_nat((feeGrowthInside0X128 - position.feeGrowthInside0LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_OPERATION;
+    var tokensOwed1: nat ?= int_to_nat((feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_OPERATION;
+
+    // update the position
+    if (amount_mint <> 0) then position.liquidity_PosInfo := liquidityNext;
+    position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
+    position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
+    if ((tokensOwed0 > 0) or (tokensOwed1 > 0)) then begin
+        // overflow is acceptable, have to withdraw before you hit type(uint128).max fees
+        position.tokensOwed0_PosInfo += tokensOwed0;
+        position.tokensOwed1_PosInfo += tokensOwed1
+    end;
+
+    return position
 }
