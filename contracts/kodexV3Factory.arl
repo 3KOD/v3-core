@@ -1,9 +1,9 @@
 // owner = caller
-archetype kodexV3Factory(owner: address, const KODEX_V3_LIB: address)
+archetype kodexV3Factory(owner: address, kodexV3lib: address)
 
 import kodexV3Pool from "./contracts/michelson/kodexV3Pool.tz"
 
-constant INVALID_OPERATION: string = "INVALID"
+constant INVALID_OPERATION: string = "ERR"
 constant MIN_TICK: int = -887272
 constant MAX_TICK: int = -MIN_TICK
 constant Q128: nat = 1 <<| 128
@@ -54,7 +54,7 @@ record Parameters {
 
 entry createPool(tokenA: address, tokenB: address, fee_: nat) {
     do_require(self_address = original, "DCall");
-    do_require(tokenA <> tokenB, "ERR");
+    do_require(tokenA <> tokenB, INVALID_OPERATION);
     var token0_cp = tokenA < tokenB ? tokenA : tokenB;
     var token1_cp = tokenA < tokenB ? tokenB : tokenA;
     // do_require(token0_cp <> none, ("INVALID_ADDRESS", token0_cp));
@@ -65,7 +65,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
     // /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
     // /// clearing it after deploying the pool.
     const amount : tez = 0tz;
-    const maxLiquidityPerTick : nat ?= call_view<nat>(KODEX_V3_LIB, "tickSpacingToMaxLpPerTick", tickSpacing_cp) : INVALID_OPERATION;
+    const maxLiquidityPerTick : nat ?= call_view<nat>(kodexV3lib, "tickSpacingToMaxLpPerTick", tickSpacing_cp) : INVALID_OPERATION;
     const slot0 : (nat * int * nat * nat * nat * nat * bool) = (0, 0, 0, 0, 0, 0, false);
 
     const storage_init : 
@@ -79,7 +79,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
         (big_map<(address * int * int), (nat * (nat * nat) * nat * nat)>) * 
         (big_map<nat, (nat * int * nat * bool)>)
     ) = 
-        (self_address, token0_cp, token1_cp, KODEX_V3_LIB, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
+        (self_address, token0_cp, token1_cp, kodexV3lib, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
     const op_addr : (operation * address) = create_contract(kodexV3Pool, none, amount, storage_init);
     operations := [op_addr[0]];
 

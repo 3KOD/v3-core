@@ -1,6 +1,6 @@
-archetype kodexV3Library(mathLib: address)
+archetype kodexV3Library(const mathLib: address)
 
-constant INVALID_OPERATION: string = "INVALID"
+constant INVALID_OPERATION: string = "ERR"
 
 constant MIN_TICK: int = -887272
 constant MAX_TICK: int = -MIN_TICK
@@ -509,12 +509,12 @@ view snapshotCumulativesInside(lower: TickInfo, upper: TickInfo, tickLower: int,
     tickCumulativeLower := lower.tickCumulativeOutside;
     secondsPerLiquidityOutsideLowerX128 := lower.secondsPerLiquidityOutsideX128;
     secondsOutsideLower :=  lower.secondsOutside;
-    do_require(lower.%initialized, "ERR");
+    do_require(lower.%initialized, INVALID_OPERATION);
 
     tickCumulativeUpper := upper.tickCumulativeOutside;
     secondsPerLiquidityOutsideUpperX128 := upper.secondsPerLiquidityOutsideX128;
     secondsOutsideUpper := upper.secondsOutside;
-    do_require(upper.%initialized, "ERR");
+    do_require(upper.%initialized, INVALID_OPERATION);
 
     if (slot0.tick < tickLower) then begin
         tickCumulativeInside := tickCumulativeLower - tickCumulativeUpper;
@@ -582,7 +582,7 @@ view burn(
     do_require(slot0_.unlocked, "LOK");
 
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
-    do_require(checkTicks_retVal, "ERR");
+    do_require(checkTicks_retVal, INVALID_OPERATION);
 
     var amount0: int = 0;
     var amount1: int = 0;
@@ -648,7 +648,7 @@ view burn_PositionInfo_view(
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
-    do_require(checkTicks_retVal, "ERR");
+    do_require(checkTicks_retVal, INVALID_OPERATION);
 
     var position ?= call_view<PositionInfo>(
         poolAddress, 
@@ -759,10 +759,10 @@ view mint_PositionInfo_view(
     const info_flippedUpper ?= call_view<TickInfo>(poolAddress, "getTick", tickUpper): INVALID_OPERATION;
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
-    do_require(amount > 0, "ERR");
+    do_require(amount > 0, INVALID_OPERATION);
 
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
-    do_require(checkTicks_retVal, "ERR");
+    do_require(checkTicks_retVal, INVALID_OPERATION);
 
     var position ?= call_view<PositionInfo>(
         poolAddress, 

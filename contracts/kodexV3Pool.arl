@@ -1,6 +1,6 @@
 archetype kodexV3Pool(factory: address, token0: address, token1: address, kodexV3lib: address)
 
-variable INVALID_OPERATION: string = "INVALID"
+variable INVALID_OPERATION: string = "ERR"
 
 constant MIN_TICK: int = -887272
 constant MAX_TICK: int = -MIN_TICK
@@ -244,7 +244,7 @@ view getTick(tickId_param: int): TickInfo {
 
 /// @dev Prevents calling a function from anyone except the address returned by IkodexV3Factory#owner()
 function onlyFactoryOwner(): bool {
-    const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : "ERR";
+    const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : INVALID_OPERATION;
     do_require(caller = factoryOwner, "FTY_ERR");
     return true
 }
@@ -331,11 +331,11 @@ entry mint(
 {
     do_require(slot0.unlocked, "LOK");
     slot0.unlocked := false;
-    do_require(amount_mint > 0, "ERR");
+    do_require(amount_mint > 0, INVALID_OPERATION);
 
     do_require(self_address = original, "DCall");
     const checkTicks_retVal ?= call_view<bool>(kodexV3lib, "checkTicks", (tickLower_mint, tickUpper_mint)) : INVALID_OPERATION;
-    do_require(checkTicks_retVal, "ERR");
+    do_require(checkTicks_retVal, INVALID_OPERATION);
     const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
 
     var position = positions[(recipient_mint, tickLower_mint, tickUpper_mint)].positionInfo;
@@ -417,7 +417,7 @@ entry mint(
         ticks[tickUpper_mint].info := info_flippedUpper; // TODO - done-info_flippedLower-storage
 
         if (flippedLower) then begin
-            do_require((tickLower_mint % tickSpacing) = 0, "ERR"); // ensure that the tick is spaced
+            do_require((tickLower_mint % tickSpacing) = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickLower_mint div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -426,7 +426,7 @@ entry mint(
         end;
 
         if (flippedUpper) then begin
-            do_require((tickUpper_mint % tickSpacing) = 0, "ERR"); // ensure that the tick is spaced
+            do_require((tickUpper_mint % tickSpacing) = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickUpper_mint div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -545,9 +545,9 @@ entry mint(
 
     const unpack_val : MintCallbackData ?= unpack<MintCallbackData>(data_mint) : INVALID_OPERATION; // TODO + please check amount amd amount_min slippage check
 
-    do_require(unpack_val.poolKey_MintData.token0_poolKey = token0, "ERR");
-    do_require(unpack_val.poolKey_MintData.token1_poolKey = token1, "ERR");
-    do_require(unpack_val.poolKey_MintData.fee_poolKey = fee, "ERR");
+    do_require(unpack_val.poolKey_MintData.token0_poolKey = token0, INVALID_OPERATION);
+    do_require(unpack_val.poolKey_MintData.token1_poolKey = token1, INVALID_OPERATION);
+    do_require(unpack_val.poolKey_MintData.fee_poolKey = fee, INVALID_OPERATION);
     
     balance0 += amount0_nat;
     balance1 += amount1_nat;
@@ -615,7 +615,7 @@ entry burn(
 
     do_require(self_address = original, "DCall");
     const checkTicks_retVal ?= call_view<bool>(kodexV3lib, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
-    do_require(checkTicks_retVal, "ERR");
+    do_require(checkTicks_retVal, INVALID_OPERATION);
     const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
 
     var position = positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo;
@@ -697,7 +697,7 @@ entry burn(
         ticks[tickUpper_burn].info := info_flippedUpper; // TODO - done-info_flippedLower-storage
 
         if (flippedLower) then begin
-            do_require(tickLower_burn % tickSpacing = 0, "ERR"); // ensure that the tick is spaced
+            do_require(tickLower_burn % tickSpacing = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickLower_burn div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -706,7 +706,7 @@ entry burn(
         end;
 
         if (flippedUpper) then begin
-            do_require(tickUpper_burn % tickSpacing = 0, "ERR"); // ensure that the tick is spaced
+            do_require(tickUpper_burn % tickSpacing = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickUpper_burn div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -1145,8 +1145,8 @@ entry swap(
 entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) {
     do_require(slot0.unlocked, "LOK");
     slot0.unlocked := false;
-    do_require(onlyFactoryOwner(), "ERR");
-    do_require((feeProtocol0 = 0 or (feeProtocol0 >= 4 and feeProtocol0 <= 10)) and (feeProtocol1 = 0 or (feeProtocol1 >= 4 and feeProtocol1 <= 10)), "ERR");
+    do_require(onlyFactoryOwner(), INVALID_OPERATION);
+    do_require((feeProtocol0 = 0 or (feeProtocol0 >= 4 and feeProtocol0 <= 10)) and (feeProtocol1 = 0 or (feeProtocol1 >= 4 and feeProtocol1 <= 10)), INVALID_OPERATION);
     const feeProtocolOld = slot0.feeProtocol;
     slot0.feeProtocol := feeProtocol0 + (feeProtocol1 <<| 4);
     emit<SetFeeProtocol>({(feeProtocolOld % 16); (feeProtocolOld |>> 4); feeProtocol0; feeProtocol1});
@@ -1162,7 +1162,7 @@ entry collectProtocol(
 {
     do_require(slot0.unlocked, "LOK");
     slot0.unlocked := false;
-    do_require(onlyFactoryOwner(), "ERR");
+    do_require(onlyFactoryOwner(), INVALID_OPERATION);
     var amount0 = amount0Requested > protocolFees.token0_fees ? protocolFees.token0_fees : amount0Requested;
     var amount1 = amount1Requested > protocolFees.token1_fees ? protocolFees.token1_fees : amount1Requested;
 

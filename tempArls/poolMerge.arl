@@ -354,12 +354,12 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
     tickCumulativeLower := lower.tickCumulativeOutside;
     secondsPerLiquidityOutsideLowerX128 := lower.secondsPerLiquidityOutsideX128;
     secondsOutsideLower :=  lower.secondsOutside;
-    do_require(lower.%initialized, "ERR");
+    do_require(lower.%initialized, INVALID_OPERATION);
 
     tickCumulativeUpper := upper.tickCumulativeOutside;
     secondsPerLiquidityOutsideUpperX128 := upper.secondsPerLiquidityOutsideX128;
     secondsOutsideUpper := upper.secondsOutside;
-    do_require(upper.%initialized, "ERR");
+    do_require(upper.%initialized, INVALID_OPERATION);
 
     // this is memory, so don't need storage
     var slot0_: Slot0 = slot0;
@@ -1322,7 +1322,7 @@ function sqrtPriceMathGetAmount0Delta_round(
     const numerator1 = liquidity_sPMGA0D <<| RESOLUTION;
     const numerator2 ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_OPERATION;
 
-    do_require(sqrtRatioAX96_val > 0, "ERR");
+    do_require(sqrtRatioAX96_val > 0, INVALID_OPERATION);
 
     if roundUp_sPMGA0D then begin
         const val1 ?= int_to_nat(ceil(numerator1 * numerator2 / sqrtRatioBX96_val)) : INVALID_OPERATION;
@@ -1408,7 +1408,7 @@ entry mint(
 {
     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
     slot0.unlocked := false;
-    do_require(amount_mint > 0, "ERR");
+    do_require(amount_mint > 0, INVALID_OPERATION);
 
     // _modifyPosition start
 
@@ -1428,8 +1428,8 @@ entry mint(
     //     nat, /* int256 amount0 */,
     //     nat, /* int256 amount1 */
     // }
-    do_require(noDelegateCall(), "ERR");
-    do_require(checkTicks(tickLower_mint, tickUpper_mint), "ERR");
+    do_require(noDelegateCall(), INVALID_OPERATION);
+    do_require(checkTicks(tickLower_mint, tickUpper_mint), INVALID_OPERATION);
     const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
     // position := _updatePosition(
     //     recipient_mint,
@@ -1574,7 +1574,7 @@ entry mint(
         ticks[tickUpper_mint].info := info_flippedUpper; // TODO - done-info_flippedLower-storage
 
         if (flippedLower) then begin
-            do_require(tickLower_mint % tickSpacing = 0, "ERR"); // ensure that the tick is spaced
+            do_require(tickLower_mint % tickSpacing = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickLower_mint div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -1583,7 +1583,7 @@ entry mint(
         end;
 
         if (flippedUpper) then begin
-            do_require(tickUpper_mint % tickSpacing = 0, "ERR"); // ensure that the tick is spaced
+            do_require(tickUpper_mint % tickSpacing = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickUpper_mint div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -1759,9 +1759,9 @@ entry mint(
 
     const unpack_val : MintCallbackData ?= unpack<MintCallbackData>(data_mint) : INVALID_OPERATION; // TODO + please check amount amd amount_min slippage check
 
-    do_require(unpack_val.poolKey.token0_poolKey = token0, "ERR");
-    do_require(unpack_val.poolKey.token1_poolKey = token1, "ERR");
-    do_require(unpack_val.poolKey.fee_poolKey = fee, "ERR");
+    do_require(unpack_val.poolKey.token0_poolKey = token0, INVALID_OPERATION);
+    do_require(unpack_val.poolKey.token1_poolKey = token1, INVALID_OPERATION);
+    do_require(unpack_val.poolKey.fee_poolKey = fee, INVALID_OPERATION);
     
     balance0 += amount0_nat;
     balance1 += amount1_nat;
@@ -1842,8 +1842,8 @@ entry burn(
     //     nat, /* int256 amount0 */,
     //     nat, /* int256 amount1 */
     // }
-    do_require(noDelegateCall(), "ERR");
-    do_require(checkTicks(tickLower_burn, tickUpper_burn), "ERR");
+    do_require(noDelegateCall(), INVALID_OPERATION);
+    do_require(checkTicks(tickLower_burn, tickUpper_burn), INVALID_OPERATION);
     const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
     // position := _updatePosition(
     //     caller,
@@ -1988,7 +1988,7 @@ entry burn(
         ticks[tickUpper_burn].info := info_flippedUpper; // TODO - done-info_flippedLower-storage
 
         if (flippedLower) then begin
-            do_require(tickLower_burn % tickSpacing = 0, "ERR"); // ensure that the tick is spaced
+            do_require(tickLower_burn % tickSpacing = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickLower_burn div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -2001,7 +2001,7 @@ entry burn(
         end;
 
         if (flippedUpper) then begin
-            do_require(tickUpper_burn % tickSpacing = 0, "ERR"); // ensure that the tick is spaced
+            do_require(tickUpper_burn % tickSpacing = 0, INVALID_OPERATION); // ensure that the tick is spaced
             const retVal_: (int * nat) ?= (tickUpper_burn div tickSpacing) /% 256 : INVALID_OPERATION;
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
@@ -2242,7 +2242,7 @@ record StepComputations {
 /// @param x the value for which to compute the most significant bit, must be greater than 0
 /// @return r the index of the most significant bit
 function bitMathMostSignificantBit(xx: nat) : nat {
-    do_require(xx > 0, "ERR");
+    do_require(xx > 0, INVALID_OPERATION);
     var x: nat = xx;
     var r: nat = 0;
 
@@ -2286,7 +2286,7 @@ function bitMathMostSignificantBit(xx: nat) : nat {
 /// @param x the value for which to compute the least significant bit, must be greater than 0
 /// @return r the index of the least significant bit
 function bitMathLeastSignificantBit(xx: nat) : nat {
-    do_require(xx > 0, "ERR");
+    do_require(xx > 0, INVALID_OPERATION);
     var x: nat = xx;
     var r: nat = 255;
 
@@ -2420,7 +2420,7 @@ function sqrtPriceMathGetNextSqrtPriceFromAmount0RoundingUp(
             product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
             // if the product overflows, we know the denominator underflows
             // in addition, we must check that the denominator does not underflow
-            do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), "ERR");
+            do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), INVALID_OPERATION);
             const denominator: nat ?= int_to_nat(numerator1 - product) : INVALID_OPERATION;
             return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
         end
@@ -2460,7 +2460,7 @@ function sqrtPriceMathGetNextSqrtPriceFromAmount1RoundingDown(
                 : abs(ceil(amount_sqrtPMGNSPFromA1RD * Q96 / liquidity_sqrtPMGNSPFromA1RD))
         );
 
-        do_require(sqrtPX96_sqrtPMGNSPFromA1RD > quotient, "ERR");
+        do_require(sqrtPX96_sqrtPMGNSPFromA1RD > quotient, INVALID_OPERATION);
         // always fits 160 bits
         const retVal: nat ?= int_to_nat(sqrtPX96_sqrtPMGNSPFromA1RD - quotient): INVALID_OPERATION;
         return retVal
@@ -2482,8 +2482,8 @@ function sqrtPriceMathGetNextSqrtPriceFromInput(
 ) : nat
 //  (uint160 sqrtQX96) 
 {
-    do_require(sqrtPX96_sqrlPriceMathGNSPFI > 0, "ERR");
-    do_require(liquidity_sqrlPriceMathGNSPFI > 0, "ERR");
+    do_require(sqrtPX96_sqrlPriceMathGNSPFI > 0, INVALID_OPERATION);
+    do_require(liquidity_sqrlPriceMathGNSPFI > 0, INVALID_OPERATION);
 
     // round to make sure that we don't pass the target price
     const retVal: nat = zeroForOne_sqrlPriceMathGNSPFI
@@ -2508,8 +2508,8 @@ function sqrtPriceMathGetNextSqrtPriceFromOutput(
 ) : nat
 //  (uint160 sqrtQX96) 
 {
-    do_require(sqrtPX96_sqrlPriceMathGNSPFO > 0, "ERR");
-    do_require(liquidity_sqrlPriceMathGNSPFO > 0, "ERR");
+    do_require(sqrtPX96_sqrlPriceMathGNSPFO > 0, INVALID_OPERATION);
+    do_require(liquidity_sqrlPriceMathGNSPFO > 0, INVALID_OPERATION);
 
     // round to make sure that we pass the target price
     const retVal: nat = zeroForOne_sqrlPriceMathGNSPFO
@@ -3000,8 +3000,8 @@ entry swap(
 entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) /* external override */ {
     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
     slot0.unlocked := false;
-    do_require(onlyFactoryOwner(), "ERR");
-    do_require((feeProtocol0 = 0 or (feeProtocol0 >= 4 and feeProtocol0 <= 10)) and (feeProtocol1 = 0 or (feeProtocol1 >= 4 and feeProtocol1 <= 10)), "ERR");
+    do_require(onlyFactoryOwner(), INVALID_OPERATION);
+    do_require((feeProtocol0 = 0 or (feeProtocol0 >= 4 and feeProtocol0 <= 10)) and (feeProtocol1 = 0 or (feeProtocol1 >= 4 and feeProtocol1 <= 10)), INVALID_OPERATION);
     const feeProtocolOld = slot0.feeProtocol;
     slot0.feeProtocol := feeProtocol0 + (feeProtocol1 <<| 4);
     emit<SetFeeProtocol>({(feeProtocolOld % 16); (feeProtocolOld |>> 4); feeProtocol0; feeProtocol1});
@@ -3018,7 +3018,7 @@ entry collectProtocol(
 {
     do_require(slot0.unlocked, ("LOK", slot0.unlocked));
     slot0.unlocked := false;
-    do_require(onlyFactoryOwner(), "ERR");
+    do_require(onlyFactoryOwner(), INVALID_OPERATION);
     var amount0 = amount0Requested > protocolFees.token0_fees ? protocolFees.token0_fees : amount0Requested;
     var amount1 = amount1Requested > protocolFees.token1_fees ? protocolFees.token1_fees : amount1Requested;
 

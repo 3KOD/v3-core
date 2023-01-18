@@ -1,6 +1,6 @@
 archetype kodexV3MathLibrary
 
-constant INVALID_OPERATION: string = "INVALID"
+constant INVALID_OPERATION: string = "ERR"
 
 constant MIN_TICK: int = -887272
 constant MAX_TICK: int = -MIN_TICK
@@ -248,7 +248,7 @@ view sqrtPriceMathGetAmount0D_rd(
     const numerator1 = liquidity_sPMGA0D <<| RESOLUTION;
     const numerator2 ?= int_to_nat(sqrtRatioBX96_val - sqrtRatioAX96_val) : INVALID_OPERATION;
 
-    do_require(sqrtRatioAX96_val > 0, "ERR");
+    do_require(sqrtRatioAX96_val > 0, INVALID_OPERATION);
 
     if roundUp_sPMGA0D then begin
         const val1 ?= int_to_nat(ceil(numerator1 * numerator2 / sqrtRatioBX96_val)) : INVALID_OPERATION;
@@ -350,7 +350,7 @@ view sqrtPriceMathGetAmount1Delta(
 /// @param x the value for which to compute the most significant bit, must be greater than 0
 /// @return r the index of the most significant bit
 view bitMathMostSignificantBit(xx: nat) : nat {
-    do_require(xx > 0, "ERR");
+    do_require(xx > 0, INVALID_OPERATION);
     var x: nat = xx;
     var r: nat = 0;
 
@@ -394,7 +394,7 @@ view bitMathMostSignificantBit(xx: nat) : nat {
 /// @param x the value for which to compute the least significant bit, must be greater than 0
 /// @return r the index of the least significant bit
 view bitMathLeastSignificantBit(xx: nat) : nat {
-    do_require(xx > 0, "ERR");
+    do_require(xx > 0, INVALID_OPERATION);
     var x: nat = xx;
     var r: nat = 255;
 
@@ -533,7 +533,7 @@ view sqrtPMathGetNSqrtPFromA0RUp(
             product := amount_sqrtPMGNSPFromA0RU * sqrtPX96_sqrtPMGNSPFromA0RU;
             // if the product overflows, we know the denominator underflows
             // in addition, we must check that the denominator does not underflow
-            do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), "ERR");
+            do_require(((product div amount_sqrtPMGNSPFromA0RU) = sqrtPX96_sqrtPMGNSPFromA0RU) and (numerator1 > product), INVALID_OPERATION);
             const denominator: nat ?= int_to_nat(numerator1 - product) : INVALID_OPERATION;
             return abs(ceil(numerator1 * sqrtPX96_sqrtPMGNSPFromA0RU / denominator))
         end
@@ -573,7 +573,7 @@ view sqrtPMathGetNSqrtPFromA1RDown(
                 : abs(ceil(amount_sqrtPMGNSPFromA1RD * Q96 / liquidity_sqrtPMGNSPFromA1RD))
         );
 
-        do_require(sqrtPX96_sqrtPMGNSPFromA1RD > quotient, "ERR");
+        do_require(sqrtPX96_sqrtPMGNSPFromA1RD > quotient, INVALID_OPERATION);
         // always fits 160 bits
         const retVal: nat ?= int_to_nat(sqrtPX96_sqrtPMGNSPFromA1RD - quotient): INVALID_OPERATION;
         return retVal
@@ -595,8 +595,8 @@ view sqrtPMathGetNSqrtPFromIn(
 ) : nat
 //  (uint160 sqrtQX96) 
 {
-    do_require(sqrtPX96_sqrlPriceMathGNSPFI > 0, "ERR");
-    do_require(liquidity_sqrlPriceMathGNSPFI > 0, "ERR");
+    do_require(sqrtPX96_sqrlPriceMathGNSPFI > 0, INVALID_OPERATION);
+    do_require(liquidity_sqrlPriceMathGNSPFI > 0, INVALID_OPERATION);
 
     // round to make sure that we don't pass the target price
 
@@ -630,8 +630,8 @@ view sqrtPMathGetNSqrtPFromOut(
 ) : nat
 //  (uint160 sqrtQX96) 
 {
-    do_require(sqrtPX96_sqrlPriceMathGNSPFO > 0, "ERR");
-    do_require(liquidity_sqrlPriceMathGNSPFO > 0, "ERR");
+    do_require(sqrtPX96_sqrlPriceMathGNSPFO > 0, INVALID_OPERATION);
+    do_require(liquidity_sqrlPriceMathGNSPFO > 0, INVALID_OPERATION);
 
     // round to make sure that we pass the target price
     const retVal_option1 ?= call_view<nat>(
