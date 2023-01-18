@@ -238,6 +238,10 @@ view getPositionInfo(owner_param: address, tickLower_param: int, tickUpper_param
     return positions[(owner_param, tickLower_param, tickUpper_param)].positionInfo
 }
 
+view getTick(tickId_param: int): TickInfo {
+    return ticks[tickId_param].info
+}
+
 /// @dev Prevents calling a function from anyone except the address returned by IkodexV3Factory#owner()
 function onlyFactoryOwner(): bool {
     const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : "ERR";
@@ -895,7 +899,7 @@ entry swap(
     do_require(self_address = original, "DCall");
     do_require(amountSpecified <> 0, "AS");
     // memory is not storage
-    var slot0Start: Slot0 = slot0;
+    const slot0Start: Slot0 = slot0;
     do_require(slot0Start.unlocked, "LOK");
     do_require(
         zeroForOne
@@ -908,15 +912,15 @@ entry swap(
     const blockTimestamp_cache ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
     // memory is not storage
     var cache: SwapCache = {
-        liquidity;
-        blockTimestamp_cache;
-        (zeroForOne ? (slot0Start.feeProtocol % 16) : (slot0Start.feeProtocol |>> 4));
-        0;
-        0;
-        false
+        liquidityStart_swapCache = liquidity;
+        blockTimestamp_swapCache = blockTimestamp_cache;
+        feeProtocol_swapCache = (zeroForOne ? (slot0Start.feeProtocol % 16) : (slot0Start.feeProtocol |>> 4));
+        secondsPerLiquidityCumulativeX128_swapCache = 0;
+        tickCumulative_swapCache = 0;
+        computedLatestObservation_swapCache = false
     };
 
-    var exactInput = amountSpecified > 0;
+    const exactInput = amountSpecified > 0;
 
     // memory is not storage
     var state_swap_param: SwapState = {
@@ -1181,37 +1185,48 @@ entry collectProtocol(
     slot0.unlocked := true
 }
 
-view burn_PositionInfo_view(tickLower: int, tickUpper: int, amount: nat): PositionInfo {
-    const retVal ?= call_view<PositionInfo>(kodexV3lib, "burn_PositionInfo_view", (
-        amount,
-        caller,
-        self_address,
-        tickLower,
-        tickUpper,
-        feeGrowthGlobal0X128,
-        feeGrowthGlobal1X128,
-        ticks[tickLower].info,
-        ticks[tickUpper].info
-    )): INVALID_OPERATION;
-    return retVal
+view mint_burn_PositionInfo_view(kind: bool, recipient: address, tickLower: int, tickUpper: int, amount: nat): PositionInfo {
+    if (kind) then begin
+        const retVal ?= call_view<PositionInfo>(kodexV3lib, "mint_PositionInfo_view", (
+            amount,
+            recipient,
+            self_address,
+            tickLower,
+            tickUpper,
+            feeGrowthGlobal0X128,
+            feeGrowthGlobal1X128
+        )): INVALID_OPERATION;
+        return retVal
+    end else begin
+        const retVal ?= call_view<PositionInfo>(kodexV3lib, "burn_PositionInfo_view", (
+            amount,
+            caller,
+            self_address,
+            tickLower,
+            tickUpper,
+            feeGrowthGlobal0X128,
+            feeGrowthGlobal1X128
+        )): INVALID_OPERATION;
+        return retVal
+    end
 }
 
-view mint_PositionInfo_view(
-    recipient: address,
-    tickLower: int,
-    tickUpper: int,
-    amount: nat
-) : PositionInfo {
-    const retVal ?= call_view<PositionInfo>(kodexV3lib, "mint_PositionInfo_view", (
-        amount,
-        recipient,
-        self_address,
-        tickLower,
-        tickUpper,
+/// @inheritdoc IkodexV3PoolActions
+view swap_view(
+    zeroForOne: bool,
+    amountSpecified: int,
+    sqrtPriceLimitX96: nat,
+): int * int {
+    const retVal ?= call_view<int * int>(kodexV3lib, "swap", (
+        zeroForOne,
+        amountSpecified,
+        sqrtPriceLimitX96,
+        liquidity,
         feeGrowthGlobal0X128,
         feeGrowthGlobal1X128,
-        ticks[tickLower].info,
-        ticks[tickUpper].info
-    )): INVALID_OPERATION;
+        self_address,
+        tickSpacing,
+        fee
+    )) : INVALID_OPERATION;
     return retVal
 }

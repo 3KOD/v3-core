@@ -7,6 +7,10 @@ constant MAX_TICK: int = -MIN_TICK
 /// @dev The minimum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MIN_TICK)
 constant Q128: nat = 1 <<| 128
 constant UNIX_START_TIME: date = 1970-01-01
+/// @dev The minimum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MIN_TICK)
+constant MIN_SQRT_RATIO: nat = 4295128739
+/// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
+constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
 
 record PoolKey {
     token0_poolKey: address;
@@ -568,56 +572,56 @@ view observe(secondsAgos: list<nat>, slot0: Slot0, liquidity: nat) : list<int> *
 
 /// @inheritdoc IkodexV3PoolActions
 view burn(
-    /* int24 */ tickLower_burn: int,
-    /* int24 */ tickUpper_burn: int,
-    /* uint128 */ amount_burn: nat,
+    tickLower: int,
+    tickUpper: int,
+    amount: nat,
     poolAddress: address
 ): nat * nat
 {
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
 
-    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
+    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, "ERR");
 
     var amount0: int = 0;
     var amount1: int = 0;
 
-    if (amount_burn <> 0) then begin
-        if (slot0_.tick < tickLower_burn) then begin
+    if (amount <> 0) then begin
+        if (slot0_.tick < tickLower) then begin
             // current tick is below the passed range; liquidity can only become in range by crossing from left to
             // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
-            const sqrtPriceMathGetAmount0Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
-            const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+            const sqrtPriceMathGetAmount0Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
+            const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper) : INVALID_OPERATION;
             amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                 sqrtPriceMathGetAmount0Delta_param0,
                 sqrtPriceMathGetAmount0Delta_param1,
-                amount_burn
+                amount
             )) : INVALID_OPERATION;
         end else begin 
-            if (slot0_.tick < tickUpper_burn) then begin
+            if (slot0_.tick < tickUpper) then begin
                 // early return if we've already written an observation this block
-                const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper) : INVALID_OPERATION;
                 amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                     slot0_.sqrtPriceX96,
                     sqrtPriceMathGetAmount0Delta_param1,
-                    amount_burn
+                    amount
                 )) : INVALID_OPERATION;
-                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     slot0_.sqrtPriceX96,
-                    amount_burn
+                    amount
                 )) : INVALID_OPERATION
             end else begin
                 // current tick is above the passed range; liquidity can only become in range by crossing from right to
                 // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
-                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
-                const sqrtPriceMathGetAmount1Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     sqrtPriceMathGetAmount1Delta_param1,
-                    amount_burn
+                    amount
                 )) : INVALID_OPERATION
             end
         end
@@ -630,33 +634,33 @@ view burn(
 
 /// @inheritdoc IkodexV3PoolActions
 view burn_PositionInfo_view(
-    amount_burn: nat,
+    amount: nat,
     caller_address: address,
     poolAddress: address,
-    tickLower_burn: int,
-    tickUpper_burn: int,
+    tickLower: int,
+    tickUpper: int,
     feeGrowthGlobal0X128_: nat,
-    feeGrowthGlobal1X128_: nat,
-    info_flippedLower: TickInfo,
-    info_flippedUpper: TickInfo
+    feeGrowthGlobal1X128_: nat
 ) : PositionInfo
 {
+    const info_flippedLower ?= call_view<TickInfo>(poolAddress, "getTick", tickLower): INVALID_OPERATION;
+    const info_flippedUpper ?= call_view<TickInfo>(poolAddress, "getTick", tickUpper): INVALID_OPERATION;
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
-    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
+    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, "ERR");
 
     var position ?= call_view<PositionInfo>(
         poolAddress, 
         "getPositionInfo", 
-        (caller_address, tickLower_burn, tickUpper_burn)
+        (caller_address, tickLower, tickUpper)
     ): INVALID_OPERATION;
 
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(self_address, "getFeeGrowthInside", (
         info_flippedLower,
         info_flippedUpper,
-        tickLower_burn,
-        tickUpper_burn,
+        tickLower,
+        tickUpper,
         slot0_.tick,
         feeGrowthGlobal0X128_,
         feeGrowthGlobal1X128_
@@ -666,11 +670,11 @@ view burn_PositionInfo_view(
     const feeGrowthInside1X128 = retVal_getFeeGrowthInside[1];
 
     var liquidityNext = 0;
-    if (amount_burn = 0) then begin
+    if (amount = 0) then begin
         do_require(position.liquidity_PosInfo > 0, "NP"); // disallow pokes for 0 liquidity positions
         liquidityNext := position.liquidity_PosInfo
     end else begin
-        liquidityNext := position.liquidity_PosInfo + amount_burn
+        liquidityNext := position.liquidity_PosInfo + amount
     end;
 
     // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
@@ -678,7 +682,7 @@ view burn_PositionInfo_view(
     var tokensOwed1: nat ?= int_to_nat((feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_OPERATION;
 
     // update the position
-    if (amount_burn <> 0) then position.liquidity_PosInfo := liquidityNext;
+    if (amount <> 0) then position.liquidity_PosInfo := liquidityNext;
     position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
     position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
     if ((tokensOwed0 > 0) or (tokensOwed1 > 0)) then begin
@@ -691,40 +695,40 @@ view burn_PositionInfo_view(
     var amount0: int = 0;
     var amount1: int = 0;
 
-    if (amount_burn <> 0) then begin
-        if (slot0_.tick < tickLower_burn) then begin
+    if (amount <> 0) then begin
+        if (slot0_.tick < tickLower) then begin
             // current tick is below the passed range; liquidity can only become in range by crossing from left to
             // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
-            const sqrtPriceMathGetAmount0Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
-            const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+            const sqrtPriceMathGetAmount0Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
+            const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper) : INVALID_OPERATION;
             amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                 sqrtPriceMathGetAmount0Delta_param0,
                 sqrtPriceMathGetAmount0Delta_param1,
-                amount_burn
+                amount
             )) : INVALID_OPERATION;
         end else begin 
-            if (slot0_.tick < tickUpper_burn) then begin
-                const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+            if (slot0_.tick < tickUpper) then begin
+                const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper) : INVALID_OPERATION;
                 amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                     slot0_.sqrtPriceX96,
                     sqrtPriceMathGetAmount0Delta_param1,
-                    amount_burn
+                    amount
                 )) : INVALID_OPERATION;
-                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     slot0_.sqrtPriceX96,
-                    amount_burn
+                    amount
                 )) : INVALID_OPERATION;
             end else begin
                 // current tick is above the passed range; liquidity can only become in range by crossing from right to
                 // left, when we'll need _more_ token1 (it's becoming more valuable) so user must provide it
-                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
-                const sqrtPriceMathGetAmount1Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper_burn) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
+                const sqrtPriceMathGetAmount1Delta_param1 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickUpper) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     sqrtPriceMathGetAmount1Delta_param1,
-                    amount_burn
+                    amount
                 )) : INVALID_OPERATION
             end
         end
@@ -742,35 +746,35 @@ view burn_PositionInfo_view(
 }
 
 view mint_PositionInfo_view(
-    amount_mint: nat,
-    recipient_mint: address,
+    amount: nat,
+    recipient: address,
     poolAddress: address,
-    tickLower_mint: int,
-    tickUpper_mint: int,
+    tickLower: int,
+    tickUpper: int,
     feeGrowthGlobal0X128_: nat,
-    feeGrowthGlobal1X128_: nat,
-    info_flippedLower_: TickInfo,
-    info_flippedUpper_: TickInfo
+    feeGrowthGlobal1X128_: nat
 ) : PositionInfo
 {
+    const info_flippedLower ?= call_view<TickInfo>(poolAddress, "getTick", tickLower): INVALID_OPERATION;
+    const info_flippedUpper ?= call_view<TickInfo>(poolAddress, "getTick", tickUpper): INVALID_OPERATION;
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
-    do_require(amount_mint > 0, "ERR");
+    do_require(amount > 0, "ERR");
 
-    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_mint, tickUpper_mint)) : INVALID_OPERATION;
+    const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, "ERR");
 
     var position ?= call_view<PositionInfo>(
         poolAddress, 
         "getPositionInfo", 
-        (recipient_mint, tickLower_mint, tickUpper_mint)
+        (recipient, tickLower, tickUpper)
     ): INVALID_OPERATION;
 
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(self_address, "getFeeGrowthInside", (
-        info_flippedLower_,
-        info_flippedUpper_,
-        tickLower_mint,
-        tickUpper_mint,
+        info_flippedLower,
+        info_flippedUpper,
+        tickLower,
+        tickUpper,
         slot0_.tick,
         feeGrowthGlobal0X128_,
         feeGrowthGlobal1X128_
@@ -780,11 +784,11 @@ view mint_PositionInfo_view(
     const feeGrowthInside1X128 = retVal_getFeeGrowthInside[1];
 
     var liquidityNext = 0;
-    if (amount_mint = 0) then begin
+    if (amount = 0) then begin
         do_require(position.liquidity_PosInfo > 0, "NP"); // disallow pokes for 0 liquidity positions
         liquidityNext := position.liquidity_PosInfo
     end else begin
-        liquidityNext := position.liquidity_PosInfo + amount_mint
+        liquidityNext := position.liquidity_PosInfo + amount
     end;
 
     // calculate accumulated fees // TOOD + fullMath 512 bit operatoin
@@ -792,7 +796,7 @@ view mint_PositionInfo_view(
     var tokensOwed1: nat ?= int_to_nat((feeGrowthInside1X128 - position.feeGrowthInside1LastX128_PosInfo) * position.liquidity_PosInfo div Q128) : INVALID_OPERATION;
 
     // update the position
-    if (amount_mint <> 0) then position.liquidity_PosInfo := liquidityNext;
+    if (amount <> 0) then position.liquidity_PosInfo := liquidityNext;
     position.feeGrowthInside0LastX128_PosInfo := feeGrowthInside0X128;
     position.feeGrowthInside1LastX128_PosInfo := feeGrowthInside1X128;
     if ((tokensOwed0 > 0) or (tokensOwed1 > 0)) then begin
@@ -802,4 +806,158 @@ view mint_PositionInfo_view(
     end;
 
     return position
+}
+
+// the top level state of the swap, the results of which are recorded in storage at the end
+record SwapState {
+    // the amount remaining to be swapped in/out of the input/output asset
+    amountSpecifiedRemaining_swapState: int;
+    // the amount already swapped out/in of the output/input asset
+    amountCalculated_swapState: int;
+    // current sqrt(price)
+    sqrtPriceX96_swapState: nat;
+    // the tick associated with the current price
+    tick_swapState: int;
+    // the global fee growth of the input token
+    feeGrowthGlobalX128_swapState: nat;
+    // amount of input token paid as protocol fee
+    protocolFee_swapState: nat;
+    // the current liquidity in range
+    liquidity_swapState: nat;
+} as ((amountSpecifiedRemaining, amountCalculated, sqrtPriceX96, tick, feeGrowthGlobalX128, protocolFee, liquidity))
+
+record StepComputations {
+    // the price at the beginning of the step
+    sqrtPriceStartX96_stepComputations: nat;
+    // the next tick to swap to from the current tick in the swap direction
+    tickNext_stepComputations: int;
+    // whether tickNext is initialized or not
+    initialized_stepComputations: bool;
+    // sqrt(price) for the next tick (1/0)
+    sqrtPriceNextX96_stepComputations: nat;
+    // how much is being swapped in in this step
+    amountIn_stepComputations: nat;
+    // how much is being swapped out
+    amountOut_stepComputations: nat;
+    // how much fee is being paid in
+    feeAmount_stepComputations: nat;
+} as ((sqrtPriceStartX96, tickNext, %initialized, sqrtPriceNextX96, amountIn, amountOut, feeAmount))
+
+/// @inheritdoc IkodexV3PoolActions
+view swap(
+    zeroForOne: bool,
+    amountSpecified: int,
+    sqrtPriceLimitX96: nat,
+    liquidity: nat,
+    feeGrowthGlobal0X128: nat,
+    feeGrowthGlobal1X128: nat,
+    poolAddress: address,
+    tickSpacing: int,
+    fee: nat
+): int * int {
+    do_require(amountSpecified <> 0, "AS");
+    const slot0Start: Slot0 ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
+    do_require(slot0Start.unlocked, "LOK");
+    do_require(
+        zeroForOne
+            ? ((sqrtPriceLimitX96 < slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 > MIN_SQRT_RATIO))
+            : ((sqrtPriceLimitX96 > slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 < MAX_SQRT_RATIO)),
+        "SPL"
+    );
+
+    const exactInput = amountSpecified > 0;
+
+    var state_swap_param: SwapState = {
+        amountSpecified;
+        0;
+        slot0Start.sqrtPriceX96;
+        slot0Start.tick;
+        (zeroForOne ? feeGrowthGlobal0X128 : feeGrowthGlobal1X128);
+        0;
+        liquidity
+    };
+
+    // continue swapping as long as we haven't used the entire input/output and haven't reached the price limit
+    while ((state_swap_param.amountSpecifiedRemaining_swapState <> 0) and (state_swap_param.sqrtPriceX96_swapState <> sqrtPriceLimitX96)) do
+        // memory is not storage
+        var step: StepComputations = {0; 0; false; 0; 0; 0; 0};
+
+        step.sqrtPriceStartX96_stepComputations := state_swap_param.sqrtPriceX96_swapState;
+
+        const retVal ?= call_view<int * bool>(self_address, "tickBmpNextInitTickWithOneW", (
+            poolAddress,
+            state_swap_param.tick_swapState,
+            tickSpacing,
+            zeroForOne
+        )) : INVALID_OPERATION;
+
+        step.tickNext_stepComputations := retVal[0];
+        step.initialized_stepComputations := retVal[1];
+
+        // ensure that we do not overshoot the min/max tick, as the tick bitmap is not aware of these bounds
+        if (step.tickNext_stepComputations < MIN_TICK) then
+            step.tickNext_stepComputations := MIN_TICK
+        else begin
+            if (step.tickNext_stepComputations > MAX_TICK) then
+                step.tickNext_stepComputations := MAX_TICK
+        end;
+
+        // get the price for the next tick
+        step.sqrtPriceNextX96_stepComputations ?:= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", (step.tickNext_stepComputations)) : INVALID_OPERATION;
+
+        // compute values to swap to the target tick, price limit, or point where input/output amount is exhausted
+        const retVal_computeSwapStep ?= call_view<nat * nat * nat * nat>(self_address, "swapMathComputeSwapStep", (
+            state_swap_param.sqrtPriceX96_swapState,
+            (zeroForOne ? step.sqrtPriceNextX96_stepComputations < sqrtPriceLimitX96 : step.sqrtPriceNextX96_stepComputations > sqrtPriceLimitX96)
+                ? sqrtPriceLimitX96
+                : step.sqrtPriceNextX96_stepComputations,
+            state_swap_param.liquidity_swapState,
+            state_swap_param.amountSpecifiedRemaining_swapState,
+            fee
+        )) : INVALID_OPERATION;
+        state_swap_param.sqrtPriceX96_swapState := retVal_computeSwapStep[0];
+        step.amountIn_stepComputations := retVal_computeSwapStep[1];
+        step.amountOut_stepComputations := retVal_computeSwapStep[2];
+        step.feeAmount_stepComputations := retVal_computeSwapStep[3];
+
+        if (exactInput) then begin
+            state_swap_param.amountSpecifiedRemaining_swapState -= (step.amountIn_stepComputations + step.feeAmount_stepComputations);
+            state_swap_param.amountCalculated_swapState := state_swap_param.amountCalculated_swapState - step.amountOut_stepComputations
+        end else begin
+            state_swap_param.amountSpecifiedRemaining_swapState += step.amountOut_stepComputations;
+            state_swap_param.amountCalculated_swapState := state_swap_param.amountCalculated_swapState + step.amountIn_stepComputations + step.feeAmount_stepComputations
+        end;
+
+        // shift tick if we reached the next price
+        if (state_swap_param.sqrtPriceX96_swapState = step.sqrtPriceNextX96_stepComputations) then begin
+            // if the tick is initialized, run the tick transition
+            if (step.initialized_stepComputations) then begin
+
+                const tick_param: int = step.tickNext_stepComputations;
+                var tickInfo ?= call_view<TickInfo>(poolAddress, "getTick", tick_param) : INVALID_OPERATION;
+                var liquidityNet_param: int = tickInfo.liquidityNet;
+
+                // if we're moving leftward, we interpret liquidityNet as the opposite sign
+                // safe because liquidityNet cannot be type(int128).min
+                if (zeroForOne) then
+                    liquidityNet_param := -liquidityNet_param;
+
+                state_swap_param.liquidity_swapState ?:= int_to_nat(state_swap_param.liquidity_swapState + liquidityNet_param) : INVALID_OPERATION
+            end;
+
+            state_swap_param.tick_swapState := zeroForOne ? (step.tickNext_stepComputations - 1) : step.tickNext_stepComputations
+        end else begin 
+            if (state_swap_param.sqrtPriceX96_swapState <> step.sqrtPriceStartX96_stepComputations) then
+                // recompute unless we're on a lower tick boundary (i.e. already transitioned ticks), and haven't moved
+                state_swap_param.tick_swapState ?:= call_view<int>(self_address, "tickMathGetTickAtSqrtRatio", (state_swap_param.sqrtPriceX96_swapState)) : INVALID_OPERATION;
+        end
+    done;
+
+    const amount0: int = (zeroForOne = exactInput)
+        ? (amountSpecified - state_swap_param.amountSpecifiedRemaining_swapState)
+        : state_swap_param.amountCalculated_swapState;
+    const amount1: int = (zeroForOne = exactInput)
+        ? state_swap_param.amountCalculated_swapState
+        : (amountSpecified - state_swap_param.amountSpecifiedRemaining_swapState);
+    return ((amount0, amount1))
 }
