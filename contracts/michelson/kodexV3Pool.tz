@@ -1592,7 +1592,7 @@
                          FAILWITH }
                        {  };
                      DUP 18;
-                     UNPACK (pair (pair (pair address address) nat) address);
+                     UNPACK (pair (pair (pair address address) nat) address nat nat);
                      IF_NONE
                        { DUP 27;
                          FAILWITH }
@@ -1660,6 +1660,7 @@
                      PAIR;
                      DUP 6;
                      CDR;
+                     CAR;
                      PAIR;
                      TRANSFER_TOKENS;
                      CONS;
@@ -1684,12 +1685,37 @@
                      PAIR;
                      DUP 6;
                      CDR;
+                     CAR;
                      PAIR;
                      TRANSFER_TOKENS;
                      CONS;
                      ITER { CONS };
                      DIP { DIG 42; DROP };
                      DUG 42;
+                     DUP;
+                     CDR;
+                     CDR;
+                     CAR;
+                     DUP 4;
+                     COMPARE;
+                     GE;
+                     IF
+                       { DUP;
+                         CDR;
+                         CDR;
+                         CDR;
+                         DUP 3;
+                         COMPARE;
+                         GE;
+                         IF
+                           { PUSH bool True }
+                           { PUSH bool False } }
+                       { PUSH bool False };
+                     NOT;
+                     IF
+                       { PUSH string "Price slippage check";
+                         FAILWITH }
+                       {  };
                      NIL operation;
                      NIL operation;
                      DUP 45;
@@ -2695,7 +2721,7 @@
                              DUP;
                              PUSH nat 1;
                              LSL;
-                             PUSH int 2;
+                             DUP 39;
                              DUP 2;
                              DUP 41;
                              DUP 6;
@@ -2706,70 +2732,13 @@
                                  PAIR;
                                  FAILWITH }
                                {  };
-                             EDIV;
-                             IF_NONE
-                               { PUSH string "DivByZero";
-                                 FAILWITH }
-                               { DUP;
-                                 CAR;
-                                 SWAP;
-                                 DROP };
-                             INT;
-                             EDIV;
-                             IF_NONE
-                               { PUSH string "DivByZero";
-                                 FAILWITH }
-                               { DUP;
-                                 CDR;
-                                 SWAP;
-                                 DROP };
-                             PUSH nat 1;
-                             DUP 2;
-                             COMPARE;
-                             EQ;
-                             IF
-                               { DUP 40;
-                                 DUP 3;
-                                 INT;
-                                 DUP 42;
-                                 DUP 7;
-                                 GET;
-                                 IF_NONE
-                                   { PUSH string "tickBitmap";
-                                     PUSH string "ASSET_NOT_FOUND";
-                                     PAIR;
-                                     FAILWITH }
-                                   {  };
-                                 INT;
-                                 SUB;
-                                 ISNAT;
-                                 IF_NONE
-                                   { DUP 29;
-                                     FAILWITH }
-                                   {  };
-                                 SOME;
-                                 DUP 6;
-                                 UPDATE;
-                                 DIP { DIG 39; DROP };
-                                 DUG 39 }
-                               { DUP 40;
-                                 DUP 3;
-                                 DUP 42;
-                                 DUP 7;
-                                 GET;
-                                 IF_NONE
-                                   { PUSH string "tickBitmap";
-                                     PUSH string "ASSET_NOT_FOUND";
-                                     PAIR;
-                                     FAILWITH }
-                                   {  };
-                                 ADD;
-                                 SOME;
-                                 DUP 6;
-                                 UPDATE;
-                                 DIP { DIG 39; DROP };
-                                 DUG 39 };
-                             DROP 5 }
+                             XOR;
+                             SOME;
+                             DUP 5;
+                             UPDATE;
+                             DIP { DIG 38; DROP };
+                             DUG 38;
+                             DROP 4 }
                            {  };
                          DUP 9;
                          IF
@@ -2814,7 +2783,7 @@
                              DUP;
                              PUSH nat 1;
                              LSL;
-                             PUSH int 2;
+                             DUP 39;
                              DUP 2;
                              DUP 41;
                              DUP 6;
@@ -2825,70 +2794,13 @@
                                  PAIR;
                                  FAILWITH }
                                {  };
-                             EDIV;
-                             IF_NONE
-                               { PUSH string "DivByZero";
-                                 FAILWITH }
-                               { DUP;
-                                 CAR;
-                                 SWAP;
-                                 DROP };
-                             INT;
-                             EDIV;
-                             IF_NONE
-                               { PUSH string "DivByZero";
-                                 FAILWITH }
-                               { DUP;
-                                 CDR;
-                                 SWAP;
-                                 DROP };
-                             PUSH nat 1;
-                             DUP 2;
-                             COMPARE;
-                             EQ;
-                             IF
-                               { DUP 40;
-                                 DUP 3;
-                                 INT;
-                                 DUP 42;
-                                 DUP 7;
-                                 GET;
-                                 IF_NONE
-                                   { PUSH string "tickBitmap";
-                                     PUSH string "ASSET_NOT_FOUND";
-                                     PAIR;
-                                     FAILWITH }
-                                   {  };
-                                 INT;
-                                 SUB;
-                                 ISNAT;
-                                 IF_NONE
-                                   { DUP 29;
-                                     FAILWITH }
-                                   {  };
-                                 SOME;
-                                 DUP 6;
-                                 UPDATE;
-                                 DIP { DIG 39; DROP };
-                                 DUG 39 }
-                               { DUP 40;
-                                 DUP 3;
-                                 DUP 42;
-                                 DUP 7;
-                                 GET;
-                                 IF_NONE
-                                   { PUSH string "tickBitmap";
-                                     PUSH string "ASSET_NOT_FOUND";
-                                     PAIR;
-                                     FAILWITH }
-                                   {  };
-                                 ADD;
-                                 SOME;
-                                 DUP 6;
-                                 UPDATE;
-                                 DIP { DIG 39; DROP };
-                                 DUG 39 };
-                             DROP 5 }
+                             XOR;
+                             SOME;
+                             DUP 5;
+                             UPDATE;
+                             DIP { DIG 38; DROP };
+                             DUG 38;
+                             DROP 4 }
                            {  };
                          DROP 8 }
                        {  };
@@ -5988,6 +5900,53 @@
       DROP;
       DIP { DROP 2 } };
   view
+    "getSlot0"
+    unit
+    (pair (nat %sqrtPriceX96) (int %tick) (nat %observationIndex) (nat %observationCardinality) (nat %observationCardinalityNext) (nat %feeProtocol) (bool %unlocked))
+    { CDR;
+      CDR;
+      CDR;
+      CDR;
+      CDR;
+      CDR;
+      CDR;
+      CDR;
+      CDR;
+      CDR;
+      CDR;
+      UNPAIR;
+      SWAP;
+      DROP;
+      UNIT;
+      DUP 2;
+      SWAP;
+      DROP;
+      DIP { DROP } };
+  view
+    "getPositionInfo"
+    (pair address int int)
+    (pair (nat %liquidity) (pair (nat %feeGrowthInside0LastX128) (nat %feeGrowthInside1LastX128)) (pair (nat %tokensOwed0) (nat %tokensOwed1)))
+    { UNPAIR;
+      DIP { CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; CDR; UNPAIR; SWAP; DROP };
+      UNPAIR 3;
+      UNIT;
+      DUP 5;
+      DUP 5;
+      DUP 5;
+      PAIR;
+      DUP 4;
+      PAIR;
+      GET;
+      IF_NONE
+        { PUSH string "positions";
+          PUSH string "ASSET_NOT_FOUND";
+          PAIR;
+          FAILWITH }
+        {  };
+      SWAP;
+      DROP;
+      DIP { DROP 4 } };
+  view
     "snapshotCumulativesInside"
     (pair int int)
     (pair int nat nat)
@@ -6073,6 +6032,110 @@
       DIP { DIG 1; DROP };
       DUG 1;
       DROP;
-      DIP { DROP 5 } }
+      DIP { DROP 5 } };
+  view
+    "burn_PositionInfo_view"
+    (pair int int nat)
+    (pair (nat %liquidity) (pair (nat %feeGrowthInside0LastX128) (nat %feeGrowthInside1LastX128)) (pair (nat %tokensOwed0) (nat %tokensOwed1)))
+    { UNPAIR;
+      DIP { CDR; CDR; CDR; UNPAIR; SWAP; UNPAIR; SWAP; CDR; CDR; CDR; CDR; CDR; CDR; UNPAIR; SWAP; UNPAIR; SWAP; CDR; CDR; UNPAIR; SWAP; DROP };
+      UNPAIR 3;
+      UNIT;
+      DUP 9;
+      DUP 6;
+      DUP 5;
+      GET;
+      IF_NONE
+        { PUSH string "ticks";
+          PUSH string "ASSET_NOT_FOUND";
+          PAIR;
+          FAILWITH }
+        {  };
+      DUP 7;
+      DUP 5;
+      GET;
+      IF_NONE
+        { PUSH string "ticks";
+          PUSH string "ASSET_NOT_FOUND";
+          PAIR;
+          FAILWITH }
+        {  };
+      PAIR;
+      DUP 8;
+      PAIR;
+      DUP 9;
+      PAIR;
+      DUP 5;
+      PAIR;
+      DUP 4;
+      PAIR;
+      SELF_ADDRESS;
+      PAIR;
+      SENDER;
+      PAIR;
+      DUP 6;
+      PAIR;
+      VIEW "burn_PositionInfo_view" (pair (nat %liquidity) (pair (nat %feeGrowthInside0LastX128) (nat %feeGrowthInside1LastX128)) (pair (nat %tokensOwed0) (nat %tokensOwed1)));
+      IF_NONE
+        { DUP 8;
+          FAILWITH }
+        {  };
+      DUP;
+      DIP { DIG 1; DROP };
+      DUG 1;
+      DROP;
+      DIP { DROP 8 } };
+  view
+    "mint_PositionInfo_view"
+    (pair address int int nat)
+    (pair (nat %liquidity) (pair (nat %feeGrowthInside0LastX128) (nat %feeGrowthInside1LastX128)) (pair (nat %tokensOwed0) (nat %tokensOwed1)))
+    { UNPAIR;
+      DIP { CDR; CDR; CDR; UNPAIR; SWAP; UNPAIR; SWAP; CDR; CDR; CDR; CDR; CDR; CDR; UNPAIR; SWAP; UNPAIR; SWAP; CDR; CDR; UNPAIR; SWAP; DROP };
+      UNPAIR 4;
+      UNIT;
+      DUP 10;
+      DUP 7;
+      DUP 6;
+      GET;
+      IF_NONE
+        { PUSH string "ticks";
+          PUSH string "ASSET_NOT_FOUND";
+          PAIR;
+          FAILWITH }
+        {  };
+      DUP 8;
+      DUP 6;
+      GET;
+      IF_NONE
+        { PUSH string "ticks";
+          PUSH string "ASSET_NOT_FOUND";
+          PAIR;
+          FAILWITH }
+        {  };
+      PAIR;
+      DUP 9;
+      PAIR;
+      DUP 10;
+      PAIR;
+      DUP 6;
+      PAIR;
+      DUP 5;
+      PAIR;
+      SELF_ADDRESS;
+      PAIR;
+      DUP 4;
+      PAIR;
+      DUP 7;
+      PAIR;
+      VIEW "mint_PositionInfo_view" (pair (nat %liquidity) (pair (nat %feeGrowthInside0LastX128) (nat %feeGrowthInside1LastX128)) (pair (nat %tokensOwed0) (nat %tokensOwed1)));
+      IF_NONE
+        { DUP 9;
+          FAILWITH }
+        {  };
+      DUP;
+      DIP { DIG 1; DROP };
+      DUG 1;
+      DROP;
+      DIP { DROP 9 } }
 }
 

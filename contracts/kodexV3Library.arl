@@ -571,9 +571,10 @@ view burn(
     /* int24 */ tickLower_burn: int,
     /* int24 */ tickUpper_burn: int,
     /* uint128 */ amount_burn: nat,
-    slot0_: Slot0
+    poolAddress: address
 ): nat * nat
 {
+    const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
 
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
@@ -629,18 +630,18 @@ view burn(
 
 /// @inheritdoc IkodexV3PoolActions
 view burn_PositionInfo_view(
+    amount_burn: nat,
+    caller_address: address,
+    poolAddress: address,
     tickLower_burn: int,
     tickUpper_burn: int,
-    amount_burn: nat,
-    slot0_: Slot0,
-    caller_address: address,
     feeGrowthGlobal0X128_: nat,
     feeGrowthGlobal1X128_: nat,
-    poolAddress: address,
-    info_flippedUpper: TickInfo,
     info_flippedLower: TickInfo,
+    info_flippedUpper: TickInfo
 ) : PositionInfo
 {
+    const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, "ERR");
@@ -740,19 +741,19 @@ view burn_PositionInfo_view(
     return position
 }
 
-view mint(
+view mint_PositionInfo_view(
+    amount_mint: nat,
     recipient_mint: address,
+    poolAddress: address,
     tickLower_mint: int,
     tickUpper_mint: int,
-    amount_mint: nat,
-    poolAddress: address,
-    slot0_: Slot0,
     feeGrowthGlobal0X128_: nat,
     feeGrowthGlobal1X128_: nat,
     info_flippedLower_: TickInfo,
-    info_flippedUpper_: TickInfo,
+    info_flippedUpper_: TickInfo
 ) : PositionInfo
 {
+    const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
     do_require(amount_mint > 0, "ERR");
 

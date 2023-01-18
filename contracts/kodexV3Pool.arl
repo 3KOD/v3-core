@@ -68,14 +68,14 @@ event Swap {
     tick_swap_event: int;
 }
 
-event Flash {
-    sender_flash_event: address;
-    recipient_flash_event: address;
-    amount0_flash_event: nat;
-    amount1_flash_event: nat;
-    paid0_flash_event: nat;
-    paid1_flash_event: nat;
-}
+// event Flash {
+//     sender_flash_event: address;
+//     recipient_flash_event: address;
+//     amount0_flash_event: nat;
+//     amount1_flash_event: nat;
+//     paid0_flash_event: nat;
+//     paid1_flash_event: nat;
+// }
 
 event IncObsCardinalityNext{
     observationCardinalityNextOld_event: nat;
@@ -698,11 +698,7 @@ entry burn(
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
             const mask = 1 <<| bitPos;
-            const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
-            if posVal = 1 then
-                tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_OPERATION
-            else
-                tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+            tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp xor mask
         end;
 
         if (flippedUpper) then begin
@@ -711,11 +707,7 @@ entry burn(
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
             const mask = 1 <<| bitPos;
-            const posVal = (tickBitmap[wordPos].tickSpacing_tickBmp div mask) % 2;
-            if posVal = 1 then
-                tickBitmap[wordPos].tickSpacing_tickBmp ?:= int_to_nat(tickBitmap[wordPos].tickSpacing_tickBmp - mask) : INVALID_OPERATION
-            else
-                tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp + mask
+            tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp xor mask
         end
     end;
 
@@ -1189,44 +1181,37 @@ entry collectProtocol(
     slot0.unlocked := true
 }
 
-view burn_view(tickLower_burn: int, tickUpper_burn: int, amount_burn: nat): nat * nat {
-    const retVal ?= call_view<nat * nat>(kodexV3lib, "burn", (tickLower_burn, tickUpper_burn, amount_burn, slot0)): INVALID_OPERATION;
-    return retVal
-}
-
-view burn_PositionInfo_view(tickLower_burn: int, tickUpper_burn: int, amount_burn: nat): nat * nat {
-    const retVal ?= call_view<nat * nat>(kodexV3lib, "burn_PositionInfo_view", (
-        tickLower_burn,
-        tickUpper_burn,
-        amount_burn,
-        slot0,
+view burn_PositionInfo_view(tickLower: int, tickUpper: int, amount: nat): PositionInfo {
+    const retVal ?= call_view<PositionInfo>(kodexV3lib, "burn_PositionInfo_view", (
+        amount,
         caller,
+        self_address,
+        tickLower,
+        tickUpper,
         feeGrowthGlobal0X128,
         feeGrowthGlobal1X128,
-        self_address,
-        ticks[tickUpper_burn].info,
-        ticks[tickLower_burn].info
+        ticks[tickLower].info,
+        ticks[tickUpper].info
     )): INVALID_OPERATION;
     return retVal
 }
 
 view mint_PositionInfo_view(
-    recipient_mint: address,
-    tickLower_mint: int,
-    tickUpper_mint: int,
-    amount_mint: nat
+    recipient: address,
+    tickLower: int,
+    tickUpper: int,
+    amount: nat
 ) : PositionInfo {
-    const retVal ?= call_view<PositionInfo>(kodexV3lib, "mint", (
-        recipient_mint,
-        tickLower_mint,
-        tickUpper_mint,
-        amount_mint,
+    const retVal ?= call_view<PositionInfo>(kodexV3lib, "mint_PositionInfo_view", (
+        amount,
+        recipient,
         self_address,
-        slot0,
+        tickLower,
+        tickUpper,
         feeGrowthGlobal0X128,
         feeGrowthGlobal1X128,
-        ticks[tickLower_mint].info,
-        ticks[tickUpper_mint].info
+        ticks[tickLower].info,
+        ticks[tickUpper].info
     )): INVALID_OPERATION;
     return retVal
 }
