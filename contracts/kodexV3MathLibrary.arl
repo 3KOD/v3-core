@@ -270,19 +270,21 @@ view sqrtPriceMathGetAmount0Delta(
     liquidity_sPMGA0D: int
 ) : int {
     if (liquidity_sPMGA0D < 0) then begin
-        const retVal ?= call_view<int>(
+        const retVal ?= call_view<nat>(
             self_address, 
             "sqrtPriceMathGetAmount0D_rd", 
-            (sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), false)
+            (sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(-liquidity_sPMGA0D), false)
+            // (sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, int_to_nat(-liquidity_sPMGA0D)? the: 0, false)
         ) : INVALID_OPERATION;
         return (-retVal)
     end else begin
-        const retVal ?= call_view<int>(
+        const retVal ?= call_view<nat>(
             self_address, 
             "sqrtPriceMathGetAmount0D_rd", 
             (sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, abs(liquidity_sPMGA0D), true)
+            // (sqrtRatioAX96_sPMGA0D, sqrtRatioBX96_sPMGA0D, int_to_nat(-liquidity_sPMGA0D)? the: 0, true)
         ) : INVALID_OPERATION;
-        return retVal
+        return (retVal-0)
     end
 }
 
@@ -327,19 +329,19 @@ view sqrtPriceMathGetAmount1Delta(
     liquidity_sPMGA1D: int
 ) : int {
     if liquidity_sPMGA1D < 0 then begin
-        const retVal ?= call_view<int>(
+        const retVal ?= call_view<nat>(
             self_address, 
             "sqrtPriceMathGetAmount1D_rd", 
             (sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), false)
         ) : INVALID_OPERATION;
         return (-retVal)
     end else begin
-        const retVal ?= call_view<int>(
+        const retVal ?= call_view<nat>(
             self_address, 
             "sqrtPriceMathGetAmount1D_rd", 
             (sqrtRatioAX96_sPMGA1D, sqrtRatioBX96_sPMGA1D, abs(liquidity_sPMGA1D), true)
         ) : INVALID_OPERATION;
-        return retVal
+        return (retVal - 0)
     end
 }
 

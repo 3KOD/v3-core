@@ -88,13 +88,6 @@ record PoolKey {
     fee_poolKey: nat
 } as (((token0, token1), fee))
 
-record MintCallbackData {
-    poolKey_MintData: PoolKey;
-    payer_MintData: address;
-    amount0Min_MintData: nat;
-    amount1Min_MintData: nat;
-}
-
 record SwapCallbackData {
     path_SwapCallbackData: bytes;
     payer_SwapCallbackData: address;
@@ -223,11 +216,11 @@ asset observations identified by observation_key to big_map {
 }
 
 view getObservation(id: nat): Observation {
-    return observations[id].observation_value
+    return (observations[id]? the.observation_value : {0;0;0;false})
 }
 
 view getTickBitmap(id: int): nat {
-    return tickBitmap[id].tickSpacing_tickBmp
+    return (tickBitmap[id]? the.tickSpacing_tickBmp : 0)
 }
 
 view getSlot0(): Slot0 {
@@ -235,11 +228,11 @@ view getSlot0(): Slot0 {
 }
 
 view getPositionInfo(owner_param: address, tickLower_param: int, tickUpper_param: int): PositionInfo {
-    return positions[(owner_param, tickLower_param, tickUpper_param)].positionInfo
+    return (positions[(owner_param, tickLower_param, tickUpper_param)]? the.positionInfo : {0;0;0;0;0})
 }
 
 view getTick(tickId_param: int): TickInfo {
-    return ticks[tickId_param].info
+    return (ticks[tickId_param]? the.info: {0;0;0;0;0;0;0;false})
 }
 
 /// @dev Prevents calling a function from anyone except the address returned by IkodexV3Factory#owner()
@@ -334,11 +327,12 @@ entry mint(
     do_require(amount_mint > 0, INVALID_OPERATION);
 
     do_require(self_address = original, "DCall");
+
     const checkTicks_retVal ?= call_view<bool>(kodexV3lib, "checkTicks", (tickLower_mint, tickUpper_mint)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, INVALID_OPERATION);
     const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
 
-    var position = positions[(recipient_mint, tickLower_mint, tickUpper_mint)].positionInfo;
+    var position = positions[(recipient_mint, tickLower_mint, tickUpper_mint)] ? the.positionInfo : {0;0;0;0;0};
 
     const feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
     const feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
@@ -347,8 +341,8 @@ entry mint(
     var flippedLower: bool = false;
     var flippedUpper: bool = false;
     if (amount_mint <> 0) then begin
-        const time ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
         
+        const time ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
         const retVal : (int * nat) ?= call_view<(int * nat)>(kodexV3lib, "observationsObserveSingle", (
             self_address,
             time,
@@ -360,13 +354,13 @@ entry mint(
         )) : INVALID_OPERATION;
         var tickCumulative = retVal[0];
         var secondsPerLiquidityCumulativeX128 = retVal[1];
-
-        var info_flippedLower = ticks[tickLower_mint].info; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
+        var info_flippedLower = ticks[tickLower_mint]? the.info : {0;0;0;0;0;0;0;false}; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
 
         var liquidityGrossBefore = info_flippedLower.liquidityGross;
         var liquidityGrossAfter = liquidityGrossBefore + amount_mint;
 
         do_require(liquidityGrossAfter <= maxLiquidityPerTick, "LO");
+        
 
         flippedLower := (liquidityGrossAfter = 0) <> (liquidityGrossBefore = 0);
 
@@ -388,8 +382,8 @@ entry mint(
 
         ticks[tickLower_mint].info := info_flippedLower; // TODO - done-info_flippedLower-storage
         
-        var info_flippedUpper = ticks[tickUpper_mint].info; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
-
+        var info_flippedUpper = ticks[tickUpper_mint]? the.info : {0;0;0;0;0;0;0;false}; // storage // TODO + don't forgot update of storage // check done-info_flippedLower-storage
+        
         liquidityGrossBefore := info_flippedUpper.liquidityGross;
         liquidityGrossAfter := liquidityGrossBefore + amount_mint;
 
@@ -422,7 +416,9 @@ entry mint(
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
             const mask = 1 <<| bitPos;
-            tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp xor mask
+            
+            var tickSpacing_tickBmp_: nat = tickBitmap[wordPos]? the.tickSpacing_tickBmp : 0;
+            tickBitmap[wordPos].tickSpacing_tickBmp := tickSpacing_tickBmp_ xor mask;
         end;
 
         if (flippedUpper) then begin
@@ -431,9 +427,11 @@ entry mint(
             const wordPos = retVal_[0];
             const bitPos = retVal_[1];
             const mask = 1 <<| bitPos;
-            tickBitmap[wordPos].tickSpacing_tickBmp := tickBitmap[wordPos].tickSpacing_tickBmp xor mask
+            var tickSpacing_tickBmp_: nat= tickBitmap[wordPos]? the.tickSpacing_tickBmp : 0;
+            tickBitmap[wordPos].tickSpacing_tickBmp := tickSpacing_tickBmp_ xor mask
         end;
     end;
+    
 
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(kodexV3lib, "getFeeGrowthInside", (
         ticks[tickLower_mint].info,
@@ -471,26 +469,29 @@ entry mint(
     end;
 
     positions[(recipient_mint, tickLower_mint, tickUpper_mint)].positionInfo := position;
-    var amount0: int = 0;
-    var amount1: int = 0;
+    var amount0: int = 0i;
+    var amount1: int = 0i;
 
     if (amount_mint <> 0) then begin
         if (slot0_.tick < tickLower_mint) then begin
             // current tick is below the passed range; liquidity can only become in range by crossing from left to
             // right, when we'll need _more_ token0 (it's becoming more valuable) so user must provide it
+
             const sqrtPriceMathGetAmount0Delta_param0 ?= call_view<nat>(kodexV3lib, "tickMathGetSqrtRatioAtTick", tickLower_mint) : INVALID_OPERATION;
+
             const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(kodexV3lib, "tickMathGetSqrtRatioAtTick", tickUpper_mint) : INVALID_OPERATION;
             amount0 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount0Delta", (
                 sqrtPriceMathGetAmount0Delta_param0,
                 sqrtPriceMathGetAmount0Delta_param1,
-                amount_mint
+                amount_mint - 0
             )) : INVALID_OPERATION;
+
         end else begin 
             if (slot0_.tick < tickUpper_mint) then begin
                 // current tick is inside the passed range
                 var liquidityBefore = liquidity; // SLOAD for gas optimization
-
-                const last = observations[slot0_.observationIndex].observation_value;
+                
+                const last = observations[slot0_.observationIndex]? the.observation_value : {0;0;0;false};
 
                 const blockTimestamp_cond ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
                 // early return if we've already written an observation this block
@@ -508,23 +509,24 @@ entry mint(
 
                     indexUpdated := (slot0_.observationIndex + 1) % cardinalityUpdated;
                     const blockTimestamp_val ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
+
                     observations[indexUpdated].observation_value ?:= call_view<Observation>(kodexV3lib, "transform", (last, blockTimestamp_val, slot0_.tick, liquidityBefore)) : INVALID_OPERATION;
                     slot0.observationIndex := indexUpdated;
                     slot0.observationCardinality := cardinalityUpdated;
                 end;
+
                 const sqrtPriceMathGetAmount0Delta_param1 ?= call_view<nat>(kodexV3lib, "tickMathGetSqrtRatioAtTick", tickUpper_mint) : INVALID_OPERATION;
                 amount0 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount0Delta", (
                     slot0_.sqrtPriceX96,
                     sqrtPriceMathGetAmount0Delta_param1,
-                    amount_mint
-                )) : INVALID_OPERATION;
+                    amount_mint - 0
+                )) : "INVALID_OPERATIONaaa";
                 const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(kodexV3lib, "tickMathGetSqrtRatioAtTick", tickLower_mint) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     slot0_.sqrtPriceX96,
-                    amount_mint
+                    amount_mint - 0
                 )) : INVALID_OPERATION;
-
                 liquidity := liquidityBefore + amount_mint
             end else begin
                 // current tick is above the passed range; liquidity can only become in range by crossing from right to
@@ -534,33 +536,19 @@ entry mint(
                 amount1 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     sqrtPriceMathGetAmount1Delta_param1,
-                    amount_mint
+                    amount_mint - 0
                 )) : INVALID_OPERATION;
             end
         end
     end;
+    
 
     const amount0_nat ?= int_to_nat(amount0) : INVALID_OPERATION;
     const amount1_nat ?= int_to_nat(amount1) : INVALID_OPERATION;
-
-    const unpack_val : MintCallbackData ?= unpack<MintCallbackData>(data_mint) : INVALID_OPERATION; // TODO + please check amount amd amount_min slippage check
-
-    do_require(unpack_val.poolKey_MintData.token0_poolKey = token0, INVALID_OPERATION);
-    do_require(unpack_val.poolKey_MintData.token1_poolKey = token1, INVALID_OPERATION);
-    do_require(unpack_val.poolKey_MintData.fee_poolKey = fee, INVALID_OPERATION);
-    
     balance0 += amount0_nat;
     balance1 += amount1_nat;
 
-    transfer 0tz to token0 call %transfer<address * address * nat>((unpack_val.payer_MintData, self_address, amount0_nat));
-    transfer 0tz to token1 call %transfer<address * address * nat>((unpack_val.payer_MintData, self_address, amount1_nat));
-
-    // Price slippage check
-    // require((amount0 >= params.amount0Min) and (amount1 >= params.amount1Min), "Price slippage check");
-    do_require(
-        (amount0_nat >= unpack_val.amount0Min_MintData) and (amount1_nat >= unpack_val.amount1Min_MintData), 
-        "Price slippage check"
-    );
+    transfer 0tz to caller call kodexV3MintCallback<nat * nat * bytes>((amount0_nat, amount1_nat, data_mint));
 
     emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat});
     slot0.unlocked := true
@@ -751,8 +739,8 @@ entry burn(
     end;
     // }
 
-    var amount0: int = 0;
-    var amount1: int = 0;
+    var amount0: int = 0i;
+    var amount1: int = 0i;
 
     if (amount_burn <> 0) then begin
         if (slot0_.tick < tickLower_burn) then begin

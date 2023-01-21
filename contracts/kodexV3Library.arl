@@ -18,11 +18,6 @@ record PoolKey {
     fee_poolKey: nat
 } as (((token0, token1), fee))
 
-record MintCallbackData {
-    poolKey: PoolKey;
-    payer: address; 
-}
-
 record SwapCallbackData {
     path_SwapCallbackData: bytes;
     payer_SwapCallbackData: address;
@@ -96,6 +91,14 @@ record Observation {
     // whether or not the observation is initialized
     initialized_Obs: bool;
 } as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
+
+
+view checkTicks(tickLower: int, tickUpper: int): bool {
+    do_require(tickLower < tickUpper, "TLU");
+    do_require(tickLower >= MIN_TICK, "TLM");
+    do_require(tickUpper <= MAX_TICK, "TUM");
+    return true
+}
 
 view tickSpacingToMaxLpPerTick(tickSpacing_: int): nat {
     const minTick = (MIN_TICK div tickSpacing_) * tickSpacing_;
@@ -238,7 +241,7 @@ view getSurroundingObservations(
             "getObservation", ((index_getSurroundingObservations + 1) % cardinality_getSurroundingObservations)
         ) : INVALID_OPERATION;
         if (beforeOrAt.initialized_Obs = false) then
-            beforeOrAt ?:= call_view<Observation>(self_address, "getObservation", 0) : INVALID_OPERATION;
+            beforeOrAt ?:= call_view<Observation>(poolAddress, "getObservation", 0) : INVALID_OPERATION;
 
         const require_cond ?= call_view<bool>(
             self_address, 
@@ -268,7 +271,7 @@ view observationsObserveSingle(
     cardinality_observeSingle: nat
 ) : int * nat {
     if (secondsAgo_observeSingle = 0) then begin
-        var last: Observation ?= call_view<Observation>(self_address, "getObservation", index_observeSingle) : INVALID_OPERATION;
+        var last: Observation ?= call_view<Observation>(poolAddress, "getObservation", index_observeSingle) : INVALID_OPERATION;
         if (last.blockTimestamp_Obs <> time_observeSingle) then 
             last ?:= call_view<Observation>(self_address, "transform", (last, time_observeSingle, tick_observeSingle, liquidity_observeSingle)) : INVALID_OPERATION;
         const val1 = last.tickCumulative_Obs;
@@ -596,7 +599,7 @@ view burn(
             amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                 sqrtPriceMathGetAmount0Delta_param0,
                 sqrtPriceMathGetAmount0Delta_param1,
-                amount
+                (amount-0)
             )) : INVALID_OPERATION;
         end else begin 
             if (slot0_.tick < tickUpper) then begin
@@ -605,13 +608,13 @@ view burn(
                 amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                     slot0_.sqrtPriceX96,
                     sqrtPriceMathGetAmount0Delta_param1,
-                    amount
+                    (amount-0)
                 )) : INVALID_OPERATION;
                 const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     slot0_.sqrtPriceX96,
-                    amount
+                    (amount - 0)
                 )) : INVALID_OPERATION
             end else begin
                 // current tick is above the passed range; liquidity can only become in range by crossing from right to
@@ -621,7 +624,7 @@ view burn(
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     sqrtPriceMathGetAmount1Delta_param1,
-                    amount
+                    (amount - 0)
                 )) : INVALID_OPERATION
             end
         end
@@ -704,7 +707,7 @@ view burn_PositionInfo_view(
             amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                 sqrtPriceMathGetAmount0Delta_param0,
                 sqrtPriceMathGetAmount0Delta_param1,
-                amount
+                (amount - 0)
             )) : INVALID_OPERATION;
         end else begin 
             if (slot0_.tick < tickUpper) then begin
@@ -712,13 +715,13 @@ view burn_PositionInfo_view(
                 amount0 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount0Delta", (
                     slot0_.sqrtPriceX96,
                     sqrtPriceMathGetAmount0Delta_param1,
-                    amount
+                    (amount - 0)
                 )) : INVALID_OPERATION;
                 const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(self_address, "tickMathGetSqrtRatioAtTick", tickLower) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     slot0_.sqrtPriceX96,
-                    amount
+                    (amount - 0)
                 )) : INVALID_OPERATION;
             end else begin
                 // current tick is above the passed range; liquidity can only become in range by crossing from right to
@@ -728,7 +731,7 @@ view burn_PositionInfo_view(
                 amount1 ?:= call_view<int>(self_address, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     sqrtPriceMathGetAmount1Delta_param1,
-                    amount
+                    (amount - 0)
                 )) : INVALID_OPERATION
             end
         end
