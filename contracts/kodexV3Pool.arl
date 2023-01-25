@@ -8,6 +8,7 @@ constant MAX_TICK: int = -MIN_TICK
 constant MIN_SQRT_RATIO: nat = 4295128739
 /// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
 constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
+constant MAX_UINT256: nat = 115792089237316195423570985008687907853269984665640564039457584007913129639935
 constant Q128: nat = 1 <<| 128
 constant original: address = self_address
 
@@ -88,10 +89,10 @@ record PoolKey {
     fee_poolKey: nat
 } as (((token0, token1), fee))
 
-record SwapCallbackData {
-    path_SwapCallbackData: bytes;
-    payer_SwapCallbackData: address;
-}
+// record SwapCallbackData {
+//     path_SwapCallbackData: bytes;
+//     payer_SwapCallbackData: address;
+// }
 
 variable fee: nat = 0
 variable tickSpacing: int = 0
@@ -483,7 +484,7 @@ entry mint(
             amount0 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount0Delta", (
                 sqrtPriceMathGetAmount0Delta_param0,
                 sqrtPriceMathGetAmount0Delta_param1,
-                amount_mint - 0
+                (amount_mint - 0)
             )) : INVALID_OPERATION;
 
         end else begin 
@@ -519,13 +520,13 @@ entry mint(
                 amount0 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount0Delta", (
                     slot0_.sqrtPriceX96,
                     sqrtPriceMathGetAmount0Delta_param1,
-                    amount_mint - 0
-                )) : "INVALID_OPERATIONaaa";
+                    (amount_mint - 0)
+                )) : INVALID_OPERATION;
                 const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(kodexV3lib, "tickMathGetSqrtRatioAtTick", tickLower_mint) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     slot0_.sqrtPriceX96,
-                    amount_mint - 0
+                    (amount_mint - 0)
                 )) : INVALID_OPERATION;
                 liquidity := liquidityBefore + amount_mint
             end else begin
@@ -536,7 +537,7 @@ entry mint(
                 amount1 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     sqrtPriceMathGetAmount1Delta_param1,
-                    amount_mint - 0
+                    (amount_mint - 0)
                 )) : INVALID_OPERATION;
             end
         end
@@ -567,7 +568,7 @@ entry collect(
     slot0.unlocked := false;
     // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
     // position is storage in solidity, so should be update again, it is updated on the last of this entry
-    var position = positions[(caller, tickLower_collect, tickUpper_collect)].positionInfo;
+    var position = positions[(caller, tickLower_collect, tickUpper_collect)]? the.positionInfo: {0;0;0;0;0};
 
     const amount0 = amount0Requested_collect > position.tokensOwed0_PosInfo ? position.tokensOwed0_PosInfo : amount0Requested_collect;
     const amount1 = amount1Requested_collect > position.tokensOwed1_PosInfo ? position.tokensOwed1_PosInfo : amount1Requested_collect;
@@ -606,7 +607,7 @@ entry burn(
     do_require(checkTicks_retVal, INVALID_OPERATION);
     const slot0_: Slot0 = slot0; // SLOAD for gas optimization // memory
 
-    var position = positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo;
+    var position = positions[(caller, tickLower_burn, tickUpper_burn)]? the.positionInfo: {0;0;0;0;0};
 
     const feeGrowthGlobal0X128_: nat = feeGrowthGlobal0X128; // SLOAD for gas optimization
     const feeGrowthGlobal1X128_: nat = feeGrowthGlobal1X128; // SLOAD for gas optimization
@@ -751,7 +752,7 @@ entry burn(
             amount0 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount0Delta", (
                 sqrtPriceMathGetAmount0Delta_param0,
                 sqrtPriceMathGetAmount0Delta_param1,
-                amount_burn
+                (amount_burn - 0)
             )) : INVALID_OPERATION;
         end else begin 
             if (slot0_.tick < tickUpper_burn) then begin
@@ -759,7 +760,7 @@ entry burn(
                 var liquidityBefore = liquidity; // SLOAD for gas optimization
 
                 // write an oracle entry
-                const last = observations[slot0_.observationIndex].observation_value;
+                const last = observations[slot0_.observationIndex]? the.observation_value : {0;0;0;false};
 
                 // early return if we've already written an observation this block
                 const blockTimestamp_cond_2 ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
@@ -786,13 +787,13 @@ entry burn(
                 amount0 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount0Delta", (
                     slot0_.sqrtPriceX96,
                     sqrtPriceMathGetAmount0Delta_param1,
-                    amount_burn
+                    (amount_burn - 0)
                 )) : INVALID_OPERATION;
                 const sqrtPriceMathGetAmount1Delta_param0 ?= call_view<nat>(kodexV3lib, "tickMathGetSqrtRatioAtTick", tickLower_burn) : INVALID_OPERATION;
                 amount1 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     slot0_.sqrtPriceX96,
-                    amount_burn
+                    (amount_burn - 0)
                 )) : INVALID_OPERATION;
 
                 liquidity := liquidityBefore + amount_burn
@@ -804,15 +805,26 @@ entry burn(
                 amount1 ?:= call_view<int>(kodexV3lib, "sqrtPriceMathGetAmount1Delta", (
                     sqrtPriceMathGetAmount1Delta_param0,
                     sqrtPriceMathGetAmount1Delta_param1,
-                    amount_burn
+                    (amount_burn - 0)
                 )) : INVALID_OPERATION
             end
         end
     end;
 
 
-    const amount0_nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
-    const amount1_nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
+    if amount0 < 0 then begin
+        amount0 := MAX_UINT256 - amount0 + 1; 
+    end;
+
+    if amount1 < 0 then begin
+        amount1 := MAX_UINT256 - amount1 + 1; 
+    end;
+
+    // const amount0_nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
+    const amount0_nat ?= int_to_nat(amount0) : INVALID_OPERATION;
+
+    // const amount1_nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
+    const amount1_nat ?= int_to_nat(amount1) : INVALID_OPERATION;
 
     if (amount0_nat > 0 or amount1_nat > 0) then begin
         position.tokensOwed0_PosInfo := position.tokensOwed0_PosInfo + amount0_nat;
@@ -889,12 +901,25 @@ entry swap(
     // memory is not storage
     const slot0Start: Slot0 = slot0;
     do_require(slot0Start.unlocked, "LOK");
-    do_require(
-        zeroForOne
-            ? ((sqrtPriceLimitX96 < slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 > MIN_SQRT_RATIO))
-            : ((sqrtPriceLimitX96 > slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 < MAX_SQRT_RATIO)),
-        "SPL"
-    );
+       
+
+    // do_require(
+    //     zeroForOne
+    //         ? ((sqrtPriceLimitX96 < slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 > MIN_SQRT_RATIO))
+    //         : ((sqrtPriceLimitX96 > slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 < MAX_SQRT_RATIO)),
+    //     "SPL"
+    // );
+    if zeroForOne = true then begin
+        do_require(sqrtPriceLimitX96 < slot0Start.sqrtPriceX96, "SPL1");
+        var minSqrtRatio: nat = MIN_SQRT_RATIO;
+        do_require(sqrtPriceLimitX96 > minSqrtRatio, "SPL2");
+    end else begin
+        do_require(sqrtPriceLimitX96 > slot0Start.sqrtPriceX96, "SPL3");
+        var maxSqrtRatio: nat = MAX_SQRT_RATIO;
+        do_require(sqrtPriceLimitX96 < maxSqrtRatio, "SPL4");
+    end;
+
+     
     slot0.unlocked := false;
 
     const blockTimestamp_cache ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
@@ -1047,8 +1072,7 @@ entry swap(
     if (state_swap_param.tick_swapState <> slot0Start.tick) then begin
         var observationIndex_param: nat = 0;
         var observationCardinality_param: nat = 0;
-        const last = observations[slot0Start.observationIndex].observation_value;
-
+        const last = observations[slot0Start.observationIndex]? the.observation_value: {0;0;0;false};
         // early return if we've already written an observation this block
         if (last.blockTimestamp_Obs = cache.blockTimestamp_swapCache) then begin
             observationIndex_param := slot0Start.observationIndex;
@@ -1105,10 +1129,11 @@ entry swap(
             transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, abs(amount1)))
         end;
 
-        var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_OPERATION;
-        const amount0_nat ?= int_to_nat(amount0) : INVALID_OPERATION;
+        // var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_OPERATION;
+        // const amount0_nat ?= int_to_nat(amount0) : INVALID_OPERATION;
+
         balance0 ?:= int_to_nat(balance0 + amount0) : INVALID_OPERATION;
-        transfer 0tz to token0 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount0_nat));
+        // transfer 0tz to token0 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount0_nat));
         // should be remove token transfer part
         transfer 0tz to caller call kodexV3SwapCallback<int * int * bytes>((amount0, amount1, data))
     end else begin
@@ -1117,10 +1142,11 @@ entry swap(
             transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)))
         end;
 
-        var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_OPERATION;
-        const amount1_nat ?= int_to_nat(amount1) : INVALID_OPERATION;
+        // var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_OPERATION;
+        // const amount1_nat ?= int_to_nat(amount1) : INVALID_OPERATION;
+
         balance0 ?:= int_to_nat(balance0 + amount1) : INVALID_OPERATION;
-        transfer 0tz to token1 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount1_nat));
+        // transfer 0tz to token1 call %transfer<address * address * nat>((data_.payer_SwapCallbackData, self_address, amount1_nat));
         // should be remove token transfer part
         transfer 0tz to caller call kodexV3SwapCallback<int * int * bytes>((amount0, amount1, data))
     end;

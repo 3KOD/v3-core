@@ -487,11 +487,17 @@ view tickBmpNextInitTickWithOneW(
 
         // if there are no initialized ticks to the left of the current tick, return leftmost in the word
         initialized_retVal := masked <> 0;
-        const bitMathLeastSignificantBit_ret ?= call_view<nat>(self_address, "bitMathLeastSignificantBit", masked) : INVALID_OPERATION;
-        // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
-        next_retVal := initialized_retVal
-            ? (compressed + 1 + (bitMathLeastSignificantBit_ret - bitPos)) * tickSpacing_tickBmpNITWOWord
-            : (compressed + 1 + (255 - bitPos)) * tickSpacing_tickBmpNITWOWord;
+        
+        if (initialized_retVal) then begin
+            const bitMathLeastSignificantBit_ret ?= call_view<nat>(self_address, "bitMathLeastSignificantBit", masked) : INVALID_OPERATION;
+            next_retVal := (compressed + 1 + (bitMathLeastSignificantBit_ret - bitPos)) * tickSpacing_tickBmpNITWOWord;
+        end else begin
+            next_retVal := (compressed + 1 + (255 - bitPos)) * tickSpacing_tickBmpNITWOWord;
+        end;
+        // // overflow/underflow is possible, but prevented externally by limiting both tickSpacing and tick
+        // next_retVal := initialized_retVal
+        //     ? (compressed + 1 + (bitMathLeastSignificantBit_ret - bitPos)) * tickSpacing_tickBmpNITWOWord
+        //     : (compressed + 1 + (255 - bitPos)) * tickSpacing_tickBmpNITWOWord;
     end;
 
     return ((next_retVal, initialized_retVal))

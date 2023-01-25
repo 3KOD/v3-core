@@ -11,17 +11,17 @@ constant UNIX_START_TIME: date = 1970-01-01
 constant MIN_SQRT_RATIO: nat = 4295128739
 /// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
 constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
-
+constant MAX_UINT256: nat = 115792089237316195423570985008687907853269984665640564039457584007913129639935
 record PoolKey {
     token0_poolKey: address;
     token1_poolKey: address;
     fee_poolKey: nat
 } as (((token0, token1), fee))
 
-record SwapCallbackData {
-    path_SwapCallbackData: bytes;
-    payer_SwapCallbackData: address;
-}
+// record SwapCallbackData {
+//     path_SwapCallbackData: bytes;
+//     payer_SwapCallbackData: address;
+// }
 
 /// @inheritdoc IkodexV3PoolState
 record Slot0 {
@@ -586,9 +586,8 @@ view burn(
 
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, INVALID_OPERATION);
-
-    var amount0: int = 0;
-    var amount1: int = 0;
+    var amount0: int = 0i;
+    var amount1: int = 0i;
 
     if (amount <> 0) then begin
         if (slot0_.tick < tickLower) then begin
@@ -629,9 +628,21 @@ view burn(
             end
         end
     end;
+    // process when amount0 and amount1 is less than 0
+    if amount0 < 0 then begin
+        amount0 := MAX_UINT256 - amount0 + 1; 
+    end;
 
-    const amount0_nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
-    const amount1_nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
+    if amount1 < 0 then begin
+        amount1 := MAX_UINT256 - amount1 + 1; 
+    end;
+
+    // var amount0_nat: nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
+    var amount0_nat: nat ?= int_to_nat(amount0) : INVALID_OPERATION;
+
+    // const amount1_nat: nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
+    const amount1_nat: nat ?= int_to_nat(amount1) : INVALID_OPERATION;
+
     return ((amount0_nat, amount1_nat))
 }
 
@@ -737,8 +748,16 @@ view burn_PositionInfo_view(
         end
     end;
 
-    const amount0_nat ?= int_to_nat(-amount0) : INVALID_OPERATION;
-    const amount1_nat ?= int_to_nat(-amount1) : INVALID_OPERATION;
+    if amount0 < 0 then begin
+        amount0 := MAX_UINT256 - amount0 + 1; 
+    end;
+
+    if amount1 < 0 then begin
+        amount1 := MAX_UINT256 - amount1 + 1; 
+    end;
+
+    const amount0_nat ?= int_to_nat(amount0) : INVALID_OPERATION;
+    const amount1_nat ?= int_to_nat(amount1) : INVALID_OPERATION;
 
     if (amount0_nat > 0 or amount1_nat > 0) then begin
         position.tokensOwed0_PosInfo := position.tokensOwed0_PosInfo + amount0_nat;
