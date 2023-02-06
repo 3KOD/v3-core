@@ -14,7 +14,7 @@ constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
 constant MAX_UINT256: nat = 115792089237316195423570985008687907853269984665640564039457584007913129639935
 
 enum token_type = 
-| %tez<unit>
+| tez_token<unit>
 | fa12<address>
 | fa20<address * nat>
 
@@ -56,36 +56,35 @@ enum token_type =
 **      0 when tokenA = tokenB
 **      1 when tokenA > tokenB
 **      2 when Invalid Compare
-**
 **/
 view tokenCompare(tokenA: token_type, tokenB: token_type) : int {
-  match tokenA with
-  | %tez(tez_A_type) -> begin
-    match tokenB with
-    | %tez(tez_B_type) -> return 2
-    | fa12(fa12_B_type) -> return 1
-    | fa20(fa20_B_type_addres, fa20_B_type_id) -> return 1
+    match tokenA with
+    | tez_token(tez_A_type) -> begin
+        match tokenB with
+        | tez_token(tez_B_type) -> return 2
+        | fa12(fa12_B_type) -> return 1
+        | fa20(fa20_B_type_address, fa20_B_type_id) -> return 1
+        end
     end
-  end
-  | fa12(fa12_A_type) -> begin
-    match tokenB with
-    | %tez(tez_B_type) -> return (-1)
-    | fa12(fa12_B_type) -> return (fa12_A_type <=> fa12_B_type)
-    | fa20(fa20_B_type_addres, fa20_B_type_id) -> return 1
+    | fa12(fa12_A_type) -> begin
+        match tokenB with
+        | tez_token(tez_B_type) -> return (-1)
+        | fa12(fa12_B_type) -> return (fa12_A_type <=> fa12_B_type)
+        | fa20(fa20_B_type_address, fa20_B_type_id) -> return 1
+        end
     end
-  end
-  | fa20(fa20_A_type_addres, fa20_A_type_id) -> begin
-    match tokenB with
-    | %tez(tez_B_type) -> return (-1)
-    | fa12(fa12_B_type) -> return (-1)
-    | fa20(fa20_B_type_addres, fa20_B_type_id) -> begin
-      var ret: int = (fa20_A_type_addres <=> fa20_B_type_addres);
-      if ret = 0 then ret := (fa20_A_type_id <=> fa20_B_type_id);
-      return ret
+    | fa20(fa20_A_type_address, fa20_A_type_id) -> begin
+        match tokenB with
+        | tez_token(tez_B_type) -> return (-1)
+        | fa12(fa12_B_type) -> return (-1)
+        | fa20(fa20_B_type_address, fa20_B_type_id) -> begin
+            var ret: int = (fa20_A_type_address <=> fa20_B_type_address);
+            if ret = 0 then ret := (fa20_A_type_id <=> fa20_B_type_id);
+            return ret
+        end
+        end
     end
     end
-  end
-  end
 }
 
 record PoolKey {
@@ -168,7 +167,6 @@ record Observation {
     // whether or not the observation is initialized
     initialized_Obs: bool;
 } as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
-
 
 view checkTicks(tickLower: int, tickUpper: int): bool {
     do_require(tickLower < tickUpper, "TLU");

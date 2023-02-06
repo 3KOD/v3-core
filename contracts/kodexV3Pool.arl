@@ -1,4 +1,4 @@
-archetype kodexV3Pool(factory: address, token0: address, token1: address, kodexV3lib: address)
+archetype kodexV3Pool(factory: address, token0: token_type, token1: token_type, kodexV3lib: address)
 
 variable INVALID_OPERATION: string = "ERR"
 
@@ -11,6 +11,11 @@ constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
 constant MAX_UINT256: nat = 115792089237316195423570985008687907853269984665640564039457584007913129639935
 constant Q128: nat = 1 <<| 128
 constant original: address = self_address
+
+enum token_type = 
+| tez_token<unit>
+| fa12<address>
+| fa20<address * nat>
 
 event Mint {
     sender_mint_event: address;
@@ -82,17 +87,6 @@ event IncObsCardinalityNext{
     observationCardinalityNextOld_event: nat;
     observationCardinalityNextNew_event: nat;
 }
-
-record PoolKey {
-    token0_poolKey: address;
-    token1_poolKey: address;
-    fee_poolKey: nat
-} as (((token0, token1), fee))
-
-// record SwapCallbackData {
-//     path_SwapCallbackData: bytes;
-//     payer_SwapCallbackData: address;
-// }
 
 variable fee: nat = 0
 variable tickSpacing: int = 0
@@ -192,6 +186,7 @@ record PositionInfo {
     tokensOwed0_PosInfo: nat;
     tokensOwed1_PosInfo: nat;
 } as ((liquidity, (feeGrowthInside0LastX128, feeGrowthInside1LastX128), (tokensOwed0, tokensOwed1)))
+
 /// @inheritdoc IkodexV3PoolState
 asset positions identified by positionId_owner positionId_tickLower positionId_tickUpper to big_map {
     positionId_owner: address;
@@ -199,6 +194,7 @@ asset positions identified by positionId_owner positionId_tickLower positionId_t
     positionId_tickUpper: int;
     positionInfo: PositionInfo;
 }
+
 record Observation {
     // the block timestamp of the observation
     blockTimestamp_Obs: nat;
@@ -209,6 +205,7 @@ record Observation {
     // whether or not the observation is initialized
     initialized_Obs: bool;
 } as ((blockTimestamp, (tickCumulative, secondsPerLiquidityCumulativeX128, %initialized)))
+
 /// @inheritdoc IkodexV3PoolState
 // Oracle.Observation[65535] public override observations;
 asset observations identified by observation_key to big_map {
@@ -234,6 +231,36 @@ view getPositionInfo(owner_param: address, tickLower_param: int, tickUpper_param
 
 view getTick(tickId_param: int): TickInfo {
     return (ticks[tickId_param]? the.info: {0;0;0;0;0;0;0;false})
+}
+
+record transfer_destination {
+  to_dest           : address;
+  token_id_dest     : nat;
+  token_amount_dest : nat
+} as ((%to_, (token_id, amount)))
+
+record transfer_param {
+  tp_from : address;
+  tp_txs  : list<transfer_destination>;
+} as ((%from_, %txs))
+
+entry tokenTransfer(token: token_type, recipient: address, amount: nat) {
+    called by self_address
+    effect {
+        match token with
+        | tez_token(tez_type) -> begin
+            const tzAmount: tez = (amount * 1tz) div 1_000_000;
+            transfer tzAmount to recipient
+        end
+        | fa12(fa12_type) -> begin
+            transfer 0tz to fa12_type call %transfer<address * address * nat>((self_address, recipient, amount));
+        end
+        | fa20(fa20_type_address, fa20_type_id) -> begin
+            const txs: list<transfer_param> = [{self_address; [{recipient; fa20_type_id; amount}]}];
+            transfer 0tz to fa20_type_address call %transfer<list<transfer_param>>(txs);
+        end
+        end
+    }
 }
 
 /// @dev Prevents calling a function from anyone except the address returned by IkodexV3Factory#owner()
@@ -362,7 +389,6 @@ entry mint(
 
         do_require(liquidityGrossAfter <= maxLiquidityPerTick, "LO");
         
-
         flippedLower := (liquidityGrossAfter = 0) <> (liquidityGrossBefore = 0);
 
         if (liquidityGrossBefore = 0) then begin
@@ -433,7 +459,6 @@ entry mint(
         end;
     end;
     
-
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(kodexV3lib, "getFeeGrowthInside", (
         ticks[tickLower_mint].info,
         ticks[tickUpper_mint].info,        
@@ -543,7 +568,6 @@ entry mint(
         end
     end;
     
-
     const amount0_nat ?= int_to_nat(amount0) : INVALID_OPERATION;
     const amount1_nat ?= int_to_nat(amount1) : INVALID_OPERATION;
     balance0 += amount0_nat;
@@ -576,12 +600,14 @@ entry collect(
     if (amount0 > 0) then begin
         position.tokensOwed0_PosInfo -= amount0;
         balance0 -= amount0;
-        transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient_collect, amount0))
+        transfer 0tz to entry self.tokenTransfer(token0, recipient_collect, amount0)
+        // transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient_collect, amount0))
     end;
     if (amount1 > 0) then begin
         position.tokensOwed1_PosInfo -= amount1;
         balance1 -= amount1;
-        transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient_collect, amount1))
+        transfer 0tz to entry self.tokenTransfer(token1, recipient_collect, amount1)
+        // transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient_collect, amount1))
     end;
 
     // position is storage in solidity, so should be update again
@@ -1126,7 +1152,8 @@ entry swap(
     if zeroForOne then begin
         if (amount1 < 0) then begin
             balance1 ?:= int_to_nat(balance1 - abs(amount1)) : INVALID_OPERATION;
-            transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, abs(amount1)))
+            transfer 0tz to entry self.tokenTransfer(token1, recipient, abs(amount1))
+            // transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, abs(amount1)))
         end;
 
         // var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_OPERATION;
@@ -1139,7 +1166,8 @@ entry swap(
     end else begin
         if (amount0 < 0) then begin
             balance0 ?:= int_to_nat(balance0 - abs(amount0)) : INVALID_OPERATION;
-            transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)))
+            transfer 0tz to entry self.tokenTransfer(token0, recipient, abs(amount0))
+            // transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, abs(amount0)))
         end;
 
         // var data_: SwapCallbackData ?= unpack<SwapCallbackData>(data) : INVALID_OPERATION;
@@ -1185,14 +1213,16 @@ entry collectProtocol(
             amount0 -= 1; // ensure that the slot is not cleared, for gas savings
         protocolFees.token0_fees -= amount0;
         balance0 -= amount0;
-        transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, amount0));
+        transfer 0tz to entry self.tokenTransfer(token0, recipient, amount0)
+        // transfer 0tz to token0 call %transfer<address * address * nat>((self_address, recipient, amount0));
     end;
     if (amount1 > 0) then begin
         if (amount1 = protocolFees.token1_fees) then 
             amount1 -= 1; // ensure that the slot is not cleared, for gas savings
         protocolFees.token1_fees -= amount1;
         balance1 -= amount1;
-        transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, amount1));
+        transfer 0tz to entry self.tokenTransfer(token1, recipient, amount1)
+        // transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, amount1));
     end;
 
     emit<CollectProtocol>({caller; recipient; amount0; amount1});

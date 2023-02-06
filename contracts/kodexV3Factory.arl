@@ -9,14 +9,19 @@ constant MAX_TICK: int = -MIN_TICK
 constant Q128: nat = 1 <<| 128
 constant original: address = self_address
 
+enum token_type = 
+| tez_token<unit>
+| fa12<address>
+| fa20<address * nat>
+
 event OwnerChanged {
     oldOwner: address;
     newOwner: address
 }
 
 event PoolCreated {
-    token0: address;
-    token1: address;
+    token0: token_type;
+    token1: token_type;
     fee: nat;
     tickSpacing: int;
     pool: address
@@ -38,39 +43,42 @@ asset feeAmountTickSpacing identified by fee to big_map {
 }
 
 asset getPool identified by token0 token1 feeOfGetPool to big_map {
-    token0: address;
-    token1: address;
+    token0: token_type;
+    token1: token_type;
     feeOfGetPool: nat;
     pool: address;
 }
 
-record Parameters {
-    para_factory: address;
-    para_token0: address;
-    para_token1: address;
-    para_fee: nat;
-    para_tickSpacing: int;
+function convertTokenType(x : token_type) : or<unit, or<address, (address * nat)>> {
+    return (
+        match x with
+        | tez_token x -> left<unit, or<address, (address * nat)>>(Unit)
+        | fa12 x -> right<unit, or<address, (address * nat)>>(left<address, (address * nat)>(x))
+        | fa20 (x, y) -> right<unit, or<address, (address * nat)>>(right<address, (address * nat)>((x, y)))
+        end
+    )
 }
 
-entry createPool(tokenA: address, tokenB: address, fee_: nat) {
+entry createPool(tokenA: token_type, tokenB: token_type, fee_: nat) {
     do_require(self_address = original, "DCall");
-    do_require(tokenA <> tokenB, INVALID_OPERATION);
-    var token0_cp = tokenA < tokenB ? tokenA : tokenB;
-    var token1_cp = tokenA < tokenB ? tokenB : tokenA;
+    const compareAB: int ?= call_view<int>(kodexV3lib, "tokenCompare", (tokenA, tokenB)) : INVALID_OPERATION;
+    do_require(compareAB <> 0i, INVALID_OPERATION);
+    const token0_cp: token_type = (compareAB = (-1)) ? tokenA : tokenB;
+    const token1_cp: token_type = (compareAB = (-1)) ? tokenB : tokenA;
     // do_require(token0_cp <> none, ("INVALID_ADDRESS", token0_cp));
     var tickSpacing_cp = feeAmountTickSpacing[fee_].tickSpacing;
     do_require(tickSpacing_cp <> 0, "INVALID_TICK_SPACING");
     do_require(is_none(getPool[(token0_cp, token1_cp, fee_)]?.pool), "INVALID_GET_POOL");
 
-    // /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
-    // /// clearing it after deploying the pool.
+    /// Deploys a pool with the given parameters by transiently setting the parameters storage slot and then
+    /// clearing it after deploying the pool.
     const amount : tez = 0tz;
     const maxLiquidityPerTick : nat ?= call_view<nat>(kodexV3lib, "tickSpacingToMaxLpPerTick", tickSpacing_cp) : INVALID_OPERATION;
     const slot0 : (nat * int * nat * nat * nat * nat * bool) = (0, 0, 0, 0, 0, 0, false);
 
     const storage_init : 
     (
-        address * address * address * address * string * nat * int * nat * nat * nat * 
+        address * or<unit, or<address, (address * nat)>> * or<unit, or<address, (address * nat)>> * address * string * nat * int * nat * nat * nat * 
         (nat * int * nat * nat * nat * nat * bool) * 
         nat * nat * 
         (nat * nat) * nat * 
@@ -79,7 +87,7 @@ entry createPool(tokenA: address, tokenB: address, fee_: nat) {
         (big_map<(address * int * int), (nat * (nat * nat) * nat * nat)>) * 
         (big_map<nat, (nat * int * nat * bool)>)
     ) = 
-        (self_address, token0_cp, token1_cp, kodexV3lib, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
+        (self_address, convertTokenType(token0_cp), convertTokenType(token1_cp), kodexV3lib, INVALID_OPERATION, fee_, tickSpacing_cp, maxLiquidityPerTick, 0, 0, slot0, 0, 0, (0, 0), 0, [], [], [], []);
     const op_addr : (operation * address) = create_contract(kodexV3Pool, none, amount, storage_init);
     operations := [op_addr[0]];
 
@@ -117,6 +125,6 @@ view getOwner(): address {
     return owner
 }
 
-view computeAddress(token0_param: address, token1_param: address, feeOfGetPool_param: nat): address {
+view computeAddress(token0_param: token_type, token1_param: token_type, feeOfGetPool_param: nat): address {
     return getPool[(token0_param, token1_param, feeOfGetPool_param)].pool
 }
