@@ -106,4 +106,4 @@ dist
 tests/binding
 contracts/.completium
 .vscode
-contracts/michelson/kodexV3Pool.tz
+*.tz

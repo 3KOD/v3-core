@@ -12,6 +12,82 @@ constant MIN_SQRT_RATIO: nat = 4295128739
 /// @dev The maximum value that can be returned from #getSqrtRatioAtTick. Equivalent to getSqrtRatioAtTick(MAX_TICK)
 constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
 constant MAX_UINT256: nat = 115792089237316195423570985008687907853269984665640564039457584007913129639935
+
+enum token_type = 
+| %tez<unit>
+| fa12<address>
+| fa20<address * nat>
+
+/**
+** Valid compare cases:
+**     tez <=> fa12
+**     tez <=> fa20
+**     fa12 <=> fa12
+**     fa12 <=> fa20
+**     fa20 <=> fa20
+**
+** Invalid compare cases:
+**     tez <=> tez
+**
+** Results of compare:
+**        A : B
+**      tez : tez  => 2
+**      tez : fa12 => 1
+**      tez : fa20 => 1
+**
+**     fa12 : tez  => -1
+**     fa12 : fa12 => -1, 0, 1
+**     fa12 : fa20 => 1
+**
+**     fa20 : tez  => -1
+**     fa20 : fa12 => -1
+**     fa20 : fa20 => -1, 0, 1
+**
+** Rule for FA20:
+**     token_address < token_address => -1
+**     token_address = token_address => 
+**          token_id < token_id => -1
+**          token_id = token_id =>  0
+**          token_id > token_id =>  1
+**     token_address > token_address =>  1
+**
+** Rule:
+**     -1 when tokenA < tokenB
+**      0 when tokenA = tokenB
+**      1 when tokenA > tokenB
+**      2 when Invalid Compare
+**
+**/
+view tokenCompare(tokenA: token_type, tokenB: token_type) : int {
+  match tokenA with
+  | %tez(tez_A_type) -> begin
+    match tokenB with
+    | %tez(tez_B_type) -> return 2
+    | fa12(fa12_B_type) -> return 1
+    | fa20(fa20_B_type_addres, fa20_B_type_id) -> return 1
+    end
+  end
+  | fa12(fa12_A_type) -> begin
+    match tokenB with
+    | %tez(tez_B_type) -> return (-1)
+    | fa12(fa12_B_type) -> return (fa12_A_type <=> fa12_B_type)
+    | fa20(fa20_B_type_addres, fa20_B_type_id) -> return 1
+    end
+  end
+  | fa20(fa20_A_type_addres, fa20_A_type_id) -> begin
+    match tokenB with
+    | %tez(tez_B_type) -> return (-1)
+    | fa12(fa12_B_type) -> return (-1)
+    | fa20(fa20_B_type_addres, fa20_B_type_id) -> begin
+      var ret: int = (fa20_A_type_addres <=> fa20_B_type_addres);
+      if ret = 0 then ret := (fa20_A_type_id <=> fa20_B_type_id);
+      return ret
+    end
+    end
+  end
+  end
+}
+
 record PoolKey {
     token0_poolKey: address;
     token1_poolKey: address;
@@ -81,6 +157,7 @@ record PositionInfo {
     tokensOwed0_PosInfo: nat;
     tokensOwed1_PosInfo: nat;
 } as ((liquidity, (feeGrowthInside0LastX128, feeGrowthInside1LastX128), (tokensOwed0, tokensOwed1)))
+
 record Observation {
     // the block timestamp of the observation
     blockTimestamp_Obs: nat;
