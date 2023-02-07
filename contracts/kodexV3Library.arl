@@ -87,6 +87,16 @@ view tokenCompare(tokenA: token_type, tokenB: token_type) : int {
     end
 }
 
+view convertTokenType(x : token_type) : or<unit, or<address, (address * nat)>> {
+    return (
+        match x with
+        | tez_token x -> left<unit, or<address, (address * nat)>>(Unit)
+        | fa12 x -> right<unit, or<address, (address * nat)>>(left<address, (address * nat)>(x))
+        | fa20 (x, y) -> right<unit, or<address, (address * nat)>>(right<address, (address * nat)>((x, y)))
+        end
+    )
+}
+
 record PoolKey {
     token0_poolKey: address;
     token1_poolKey: address;
@@ -340,11 +350,12 @@ view observationsObserveSingle(
     poolAddress: address,
     time_observeSingle: nat,
     secondsAgo_observeSingle: nat,
-    tick_observeSingle: int,
-    index_observeSingle: nat,
-    liquidity_observeSingle: nat,
-    cardinality_observeSingle: nat
+    liquidity_observeSingle: nat
 ) : int * nat {
+    const slot0 ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
+    const tick_observeSingle = slot0.tick;
+    const index_observeSingle = slot0.observationIndex;
+    const cardinality_observeSingle = slot0.observationCardinality;
     if (secondsAgo_observeSingle = 0) then begin
         var last: Observation ?= call_view<Observation>(poolAddress, "getObservation", index_observeSingle) : INVALID_OPERATION;
         if (last.blockTimestamp_Obs <> time_observeSingle) then 
@@ -398,14 +409,16 @@ view observationsObserveSingle(
 /// @return feeGrowthInside0X128 The all-time fee growth in token0, per unit of liquidity, inside the position's tick boundaries
 /// @return feeGrowthInside1X128 The all-time fee growth in token1, per unit of liquidity, inside the position's tick boundaries
 view getFeeGrowthInside(
-    lower: TickInfo,
-    upper: TickInfo,
+    poolAddress: address,
     tickLower_getFeeGrowthInside: int,
     tickUpper_getFeeGrowthInside: int,
-    tickCurrent_getFeeGrowthInside: int,
     feeGrowthGlobal0X128_getFeeGrowthInside: nat,
     feeGrowthGlobal1X128_getFeeGrowthInside: nat
 ) : nat * nat {
+    const slot0 ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
+    const tickCurrent_getFeeGrowthInside: int = slot0.tick;
+    const lower ?= call_view<TickInfo>(poolAddress, "getTick", tickLower_getFeeGrowthInside): INVALID_OPERATION;
+    const upper ?= call_view<TickInfo>(poolAddress, "getTick", tickUpper_getFeeGrowthInside): INVALID_OPERATION;
     // calculate fee growth below
     var feeGrowthBelow0X128 = 0;
     var feeGrowthBelow1X128 = 0;
@@ -567,8 +580,10 @@ view swapMathComputeSwapStep(
 }
 
 /// @inheritdoc IkodexV3PoolDerivedState
-view snapshotCumulativesInside(lower: TickInfo, upper: TickInfo, tickLower: int, tickUpper: int, slot0: Slot0, liquidity: nat): int * nat * nat
+view snapshotCumulativesInside(poolAddress: address, tickLower: int, tickUpper: int, liquidity: nat): int * nat * nat
 {
+    const lower ?= call_view<TickInfo>(poolAddress, "getTick", tickLower): INVALID_OPERATION;
+    const upper ?= call_view<TickInfo>(poolAddress, "getTick", tickUpper): INVALID_OPERATION;
     do_require(tickLower < tickUpper, "TLU");
     do_require(tickLower >= MIN_TICK, "TLM");
     do_require(tickUpper <= MAX_TICK, "TUM");
@@ -594,6 +609,7 @@ view snapshotCumulativesInside(lower: TickInfo, upper: TickInfo, tickLower: int,
     secondsOutsideUpper := upper.secondsOutside;
     do_require(upper.%initialized, INVALID_OPERATION);
 
+    const slot0 ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     if (slot0.tick < tickLower) then begin
         tickCumulativeInside := tickCumulativeLower - tickCumulativeUpper;
         secondsPerLiquidityInsideX128 ?:= int_to_nat(secondsPerLiquidityOutsideLowerX128 - secondsPerLiquidityOutsideUpperX128) : INVALID_OPERATION;
@@ -605,10 +621,7 @@ view snapshotCumulativesInside(lower: TickInfo, upper: TickInfo, tickLower: int,
             self_address,
             time,
             0,
-            slot0.tick,
-            slot0.observationIndex,
-            liquidity,
-            slot0.observationCardinality
+            liquidity
         )) : INVALID_OPERATION;
         const tickCumulative: int = retVal[0];
         const secondsPerLiquidityCumulativeX128: nat = retVal[1];
@@ -625,7 +638,8 @@ view snapshotCumulativesInside(lower: TickInfo, upper: TickInfo, tickLower: int,
 }
 
 /// @inheritdoc IkodexV3PoolDerivedState
-view observe(secondsAgos: list<nat>, slot0: Slot0, liquidity: nat) : list<int> * list<nat> {
+view observe(poolAddress: address, secondsAgos: list<nat>, liquidity: nat) : list<int> * list<nat> {
+    const slot0 ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0.observationCardinality > 0, "I");
 
     const time_val ?= call_view<nat>(self_address, "blockTimestamp_", Unit) : INVALID_OPERATION;
@@ -636,10 +650,7 @@ view observe(secondsAgos: list<nat>, slot0: Slot0, liquidity: nat) : list<int> *
         const retVal ?= call_view<int * nat>(self_address, "observationsObserveSingle", (
             time_val,
             (nth(secondsAgos, i) ? the : 0),
-            slot0.tick,
-            slot0.observationIndex,
-            liquidity,
-            slot0.observationCardinality
+            liquidity
         )) : INVALID_OPERATION;
         tickCumulatives := concat(tickCumulatives, [retVal[0]]);
         secondsPerLiquidityCumulativeX128s := concat(secondsPerLiquidityCumulativeX128s, [retVal[1]]);
@@ -732,8 +743,6 @@ view burn_PositionInfo_view(
     feeGrowthGlobal1X128_: nat
 ) : PositionInfo
 {
-    const info_flippedLower ?= call_view<TickInfo>(poolAddress, "getTick", tickLower): INVALID_OPERATION;
-    const info_flippedUpper ?= call_view<TickInfo>(poolAddress, "getTick", tickUpper): INVALID_OPERATION;
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
@@ -746,11 +755,9 @@ view burn_PositionInfo_view(
     ): INVALID_OPERATION;
 
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(self_address, "getFeeGrowthInside", (
-        info_flippedLower,
-        info_flippedUpper,
+        poolAddress,
         tickLower,
         tickUpper,
-        slot0_.tick,
         feeGrowthGlobal0X128_,
         feeGrowthGlobal1X128_
     )) : INVALID_OPERATION;
@@ -852,8 +859,6 @@ view mint_PositionInfo_view(
     feeGrowthGlobal1X128_: nat
 ) : PositionInfo
 {
-    const info_flippedLower ?= call_view<TickInfo>(poolAddress, "getTick", tickLower): INVALID_OPERATION;
-    const info_flippedUpper ?= call_view<TickInfo>(poolAddress, "getTick", tickUpper): INVALID_OPERATION;
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(slot0_.unlocked, "LOK");
     do_require(amount > 0, INVALID_OPERATION);
@@ -868,11 +873,9 @@ view mint_PositionInfo_view(
     ): INVALID_OPERATION;
 
     const retVal_getFeeGrowthInside: (nat * nat) ?= call_view<(nat * nat)>(self_address, "getFeeGrowthInside", (
-        info_flippedLower,
-        info_flippedUpper,
+        poolAddress,
         tickLower,
         tickUpper,
-        slot0_.tick,
         feeGrowthGlobal0X128_,
         feeGrowthGlobal1X128_
     )) : INVALID_OPERATION;
