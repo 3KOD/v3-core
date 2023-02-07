@@ -45,24 +45,24 @@ event Collect {
     amount1_collect_event: nat;
 }
 
-event SetFeeProtocol {
-    feeProtocol0Old_setFeeProtocol_event: nat; 
-    feeProtocol1Old_setFeeProtocol_event: nat; 
-    feeProtocol0New_setFeeProtocol_event: nat; 
-    feeProtocol1New_setFeeProtocol_event: nat;
-}
+// event SetFeeProtocol {
+//     feeProtocol0Old_setFeeProtocol_event: nat; 
+//     feeProtocol1Old_setFeeProtocol_event: nat; 
+//     feeProtocol0New_setFeeProtocol_event: nat; 
+//     feeProtocol1New_setFeeProtocol_event: nat;
+// }
 
-event CollectProtocol {
-    sender_collectProtocol_event: address; 
-    recipient_collectProtocol_event: address; 
-    amount0_collectProtocol_event: nat; 
-    amount1_collectProtocol_event: nat;
-}
+// event CollectProtocol {
+//     sender_collectProtocol_event: address; 
+//     recipient_collectProtocol_event: address; 
+//     amount0_collectProtocol_event: nat; 
+//     amount1_collectProtocol_event: nat;
+// }
 
-event Initialize {
-    sqrtPriceX96_initialize_event : nat; 
-    tick_initialize_event : int;
-}
+// event Initialize {
+//     sqrtPriceX96_initialize_event : nat; 
+//     tick_initialize_event : int;
+// }
 
 event Swap {
     sender_swap_event: address;
@@ -83,10 +83,10 @@ event Swap {
 //     paid1_flash_event: nat;
 // }
 
-event IncObsCardinalityNext{
-    observationCardinalityNextOld_event: nat;
-    observationCardinalityNextNew_event: nat;
-}
+// event IncObsCardinalityNext{
+//     observationCardinalityNextOld_event: nat;
+//     observationCardinalityNextNew_event: nat;
+// }
 
 variable fee: nat = 0
 variable tickSpacing: int = 0
@@ -315,8 +315,8 @@ entry increaseObservationCardinalityNext(observationCardinalityNext_param: nat)
         end;
 
         slot0.observationCardinalityNext := observationCardinalityNextNew;
-        if (observationCardinalityNextOld <> observationCardinalityNextNew) then
-            emit<IncObsCardinalityNext>({observationCardinalityNextOld; observationCardinalityNextNew});
+        // if (observationCardinalityNextOld <> observationCardinalityNextNew) then
+            // emit<IncObsCardinalityNext>({observationCardinalityNextOld; observationCardinalityNextNew});
         slot0.unlocked := true
     }
 }
@@ -333,9 +333,9 @@ entry initialize(sqrtPriceX96_initialize: nat) /* external override */ {
 
         observations[0].observation_value := {retVal; 0; 0; true};
 
-        slot0 := { sqrtPriceX96_initialize; tick_param; 0; 1; 1; 0; true};
+        slot0 := { sqrtPriceX96_initialize; tick_param; 0; 1; 1; 0; true}
 
-        emit<Initialize>({sqrtPriceX96_initialize; tick_param})
+        // emit<Initialize>({sqrtPriceX96_initialize; tick_param})
     }
 }
 
@@ -1184,9 +1184,9 @@ entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) {
         const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : INVALID_OPERATION;
         do_require(caller = factoryOwner, "FTY_ERR");
         do_require((feeProtocol0 = 0 or (feeProtocol0 >= 4 and feeProtocol0 <= 10)) and (feeProtocol1 = 0 or (feeProtocol1 >= 4 and feeProtocol1 <= 10)), INVALID_OPERATION);
-        const feeProtocolOld = slot0.feeProtocol;
+        // const feeProtocolOld = slot0.feeProtocol;
         slot0.feeProtocol := feeProtocol0 + (feeProtocol1 <<| 4);
-        emit<SetFeeProtocol>({(feeProtocolOld % 16); (feeProtocolOld |>> 4); feeProtocol0; feeProtocol1});
+        // emit<SetFeeProtocol>({(feeProtocolOld % 16); (feeProtocolOld |>> 4); feeProtocol0; feeProtocol1});
         slot0.unlocked := true
     }
 }
@@ -1224,7 +1224,7 @@ entry collectProtocol(
             // transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, amount1));
         end;
 
-        emit<CollectProtocol>({caller; recipient; amount0; amount1});
+        // emit<CollectProtocol>({caller; recipient; amount0; amount1});
         slot0.unlocked := true
     }
 }
