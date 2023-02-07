@@ -19,13 +19,13 @@ enum token_type =
 //     newOwner: address
 // }
 
-event PoolCreated {
-    token0: token_type;
-    token1: token_type;
-    fee: nat;
-    tickSpacing: int;
-    pool: address
-}
+// event PoolCreated {
+//     token0: token_type;
+//     token1: token_type;
+//     fee: nat;
+//     tickSpacing: int;
+//     pool: address
+// }
 
 // event FeeAmountEnabled {
 //     fee: nat;
@@ -93,8 +93,8 @@ entry createPool(tokenA: token_type, tokenB: token_type, fee_: nat) {
     operations := [op_addr[0]];
 
     getPool[(token0_cp, token1_cp, fee_)].pool := op_addr[1];
-    getPool[(token1_cp, token0_cp, fee_)].pool := op_addr[1];
-    emit<PoolCreated>({token0_cp; token1_cp; fee_; tickSpacing_cp; op_addr[1]})
+    getPool[(token1_cp, token0_cp, fee_)].pool := op_addr[1]
+    // emit<PoolCreated>({token0_cp; token1_cp; fee_; tickSpacing_cp; op_addr[1]})
 }
 
 entry setOwner(owner_: address) {
