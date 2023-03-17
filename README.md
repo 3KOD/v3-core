@@ -1,14 +1,15 @@
 # v3-core
+
 KODKODKOD DEX v3-core smart contract
 
-```
+```bash
 npm install
 npm run gen-binding
 ```
 
 ## March 17
 
-```
+```bash
 completium-cli generate michelson ./contracts/kodexV3Pool.arl 1> ./contracts/michelson/kodexV3Pool.tz;
 
 npm run gen-binding;
