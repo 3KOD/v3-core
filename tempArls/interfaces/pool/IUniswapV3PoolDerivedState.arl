@@ -1,8 +1,0 @@
-archetype IkodexV3PoolDerivedState
-    
-view observe(
-    secondsAgos: nat[]
-) : <int[], nat[]> {};
-
-view snapshotCumulativesInside(tickLower: int, tickUpper: int) : <int, nat, nat> {};
-

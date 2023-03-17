@@ -10,7 +10,6 @@ constant MIN_SQRT_RATIO: nat = 4295128739
 constant MAX_SQRT_RATIO: nat = 1461446703485210103287273052203988822378723970342
 constant MAX_UINT256: nat = 115792089237316195423570985008687907853269984665640564039457584007913129639935
 constant Q128: nat = 1 <<| 128
-constant original: address = self_address
 
 enum token_type = 
 | tez_token<unit>
@@ -111,7 +110,7 @@ record Slot0 {
     // represented as an integer denominator (1/x)%
     feeProtocol: nat;
     // whether the pool is locked
-    unlocked: bool;
+    // unlocked: bool;
 }
 
 variable slot0: Slot0 = {
@@ -120,8 +119,8 @@ variable slot0: Slot0 = {
     observationIndex            = 0;
     observationCardinality      = 0;
     observationCardinalityNext  = 0;
-    feeProtocol                 = 0;
-    unlocked                    = false
+    feeProtocol                 = 0
+    // unlocked                    = false
 }
 
 /// @inheritdoc IkodexV3PoolState
@@ -266,7 +265,6 @@ entry tokenTransfer(token: token_type, recipient: address, amount: nat) {
 /// @inheritdoc IkodexV3PoolDerivedState
 view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
 {
-    do_require(self_address = original, "DCall");
     const retVal ?= call_view<int * nat * nat>(
         kodexV3lib, 
         "snapshotCumulativesInside", 
@@ -277,7 +275,6 @@ view snapshotCumulativesInside(tickLower: int, tickUpper: int): int * nat * nat
 
 /// @inheritdoc IkodexV3PoolDerivedState
 view observe(secondsAgos: list<nat>) : list<int> * list<nat> {
-    do_require(self_address = original, "DCall");
     const retVal ?= call_view<list<int> * list<nat>>(
         kodexV3lib, 
         "observe", 
@@ -291,9 +288,6 @@ entry increaseObservationCardinalityNext(observationCardinalityNext_param: nat)
 {
     no transfer
     effect {
-        do_require(self_address = original, "DCall");
-        do_require(slot0.unlocked, "LOK");
-        slot0.unlocked := false;
         const observationCardinalityNextOld: nat /* uint16 */ = slot0.observationCardinalityNext; // for the event
         var observationCardinalityNextNew: nat =0; /* uint16 */
         do_require(observationCardinalityNextOld > 0, "I");
@@ -314,10 +308,9 @@ entry increaseObservationCardinalityNext(observationCardinalityNext_param: nat)
             observationCardinalityNextNew := observationCardinalityNext_param;
         end;
 
-        slot0.observationCardinalityNext := observationCardinalityNextNew;
+        slot0.observationCardinalityNext := observationCardinalityNextNew
         // if (observationCardinalityNextOld <> observationCardinalityNextNew) then
             // emit<IncObsCardinalityNext>({observationCardinalityNextOld; observationCardinalityNextNew});
-        slot0.unlocked := true
     }
 }
 
@@ -346,11 +339,7 @@ entry mint(
     /* uint128 */ amount_mint: nat,
     /* bytes calldata */ data_mint: bytes
 ) {
-    do_require(slot0.unlocked, "LOK");
-    slot0.unlocked := false;
     do_require(amount_mint > 0, INVALID_OPERATION);
-
-    do_require(self_address = original, "DCall");
 
     const checkTicks_retVal ?= call_view<bool>(kodexV3lib, "checkTicks", (tickLower_mint, tickUpper_mint)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, INVALID_OPERATION);
@@ -566,8 +555,7 @@ entry mint(
 
     transfer transferred to caller call kodexV3MintCallback<nat * nat * bytes>((amount0_nat, amount1_nat, data_mint));
 
-    emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat});
-    slot0.unlocked := true
+    emit<Mint>({caller; recipient_mint; tickLower_mint; tickUpper_mint; amount_mint; amount0_nat; amount1_nat})
 }
 
 /// @inheritdoc IkodexV3PoolActions
@@ -581,8 +569,6 @@ entry collect(
 {
     no transfer
     effect {
-        do_require(slot0.unlocked, "LOK");
-        slot0.unlocked := false;
         // we don't need to checkTicks here, because invalid positions will never have non-zero tokensOwed{0,1}
         // position is storage in solidity, so should be update again, it is updated on the last of this entry
         const position = positions[(caller, tickLower_collect, tickUpper_collect)]? the.positionInfo: {0;0;0;0;0};
@@ -606,8 +592,7 @@ entry collect(
         // position is storage in solidity, so should be update again
         positions[(caller, tickLower_collect, tickUpper_collect)].positionInfo := position;
 
-        emit<Collect>({caller; recipient_collect; tickLower_collect; tickUpper_collect; amount0; amount1});
-        slot0.unlocked := true
+        emit<Collect>({caller; recipient_collect; tickLower_collect; tickUpper_collect; amount0; amount1})
     }
 }
 
@@ -621,10 +606,6 @@ entry burn(
 {
     no transfer
     effect {
-        do_require(slot0.unlocked, "LOK");
-        slot0.unlocked := false;
-
-        do_require(self_address = original, "DCall");
         const checkTicks_retVal ?= call_view<bool>(kodexV3lib, "checkTicks", (tickLower_burn, tickUpper_burn)) : INVALID_OPERATION;
         do_require(checkTicks_retVal, INVALID_OPERATION);
         // const slot0: Slot0 = slot0; // SLOAD for gas optimization // memory
@@ -849,8 +830,7 @@ entry burn(
         // position is storage in solidity, so should be update again
         positions[(caller, tickLower_burn, tickUpper_burn)].positionInfo := position;
 
-        emit<Burn>({caller; tickLower_burn; tickUpper_burn; amount_burn; amount0_nat; amount1_nat});
-        slot0.unlocked := true
+        emit<Burn>({caller; tickLower_burn; tickUpper_burn; amount_burn; amount0_nat; amount1_nat})
     }
 }
 
@@ -912,12 +892,7 @@ entry swap(
     /* uint160 */ sqrtPriceLimitX96: nat,
     /* bytes calldata */ data: bytes
 ) {
-    do_require(self_address = original, "DCall");
     do_require(amountSpecified <> 0, "AS");
-    // memory is not storage
-    // const slot0: Slot0 = slot0;
-    do_require(slot0.unlocked, "LOK");
-    
 
     // do_require(
     //     zeroForOne
@@ -934,8 +909,6 @@ entry swap(
         const maxSqrtRatio: nat = MAX_SQRT_RATIO;
         do_require(sqrtPriceLimitX96 < maxSqrtRatio, "SPL4");
     end;
-
-    slot0.unlocked := false;
 
     const blockTimestamp_cache ?= call_view<nat>(kodexV3lib, "blockTimestamp_", Unit) : INVALID_OPERATION;
     // memory is not storage
@@ -1165,23 +1138,19 @@ entry swap(
         transfer transferred to caller call kodexV3SwapCallback<int * int * bytes>((amount0, amount1, data))
     end;
 
-    emit<Swap>({caller; recipient; amount0; amount1; state_swap_param.sqrtPriceX96_swapState; state_swap_param.liquidity_swapState; state_swap_param.tick_swapState});
-    slot0.unlocked := true
+    emit<Swap>({caller; recipient; amount0; amount1; state_swap_param.sqrtPriceX96_swapState; state_swap_param.liquidity_swapState; state_swap_param.tick_swapState})
 }
 
 /// @inheritdoc IkodexV3PoolOwnerActions
 entry setFeeProtocol(feeProtocol0: nat, feeProtocol1: nat) {
     no transfer
     effect {
-        do_require(slot0.unlocked, "LOK");
-        slot0.unlocked := false;
         const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : INVALID_OPERATION;
         do_require(caller = factoryOwner, "FTY_ERR");
         do_require((feeProtocol0 = 0 or (feeProtocol0 >= 4 and feeProtocol0 <= 10)) and (feeProtocol1 = 0 or (feeProtocol1 >= 4 and feeProtocol1 <= 10)), INVALID_OPERATION);
         // const feeProtocolOld = slot0.feeProtocol;
-        slot0.feeProtocol := feeProtocol0 + (feeProtocol1 <<| 4);
+        slot0.feeProtocol := feeProtocol0 + (feeProtocol1 <<| 4)
         // emit<SetFeeProtocol>({(feeProtocolOld % 16); (feeProtocolOld |>> 4); feeProtocol0; feeProtocol1});
-        slot0.unlocked := true
     }
 }
 
@@ -1194,8 +1163,6 @@ entry collectProtocol(
 {
     no transfer
     effect {
-        do_require(slot0.unlocked, "LOK");
-        slot0.unlocked := false;
         const factoryOwner ?= call_view<address>(factory, "getOwner", Unit) : INVALID_OPERATION;
         do_require(caller = factoryOwner, "FTY_ERR");
         var amount0 = amount0Requested > protocolFees.token0_fees ? protocolFees.token0_fees : amount0Requested;
@@ -1216,10 +1183,9 @@ entry collectProtocol(
             balance1 -= amount1;
             transfer 0tz to entry self.tokenTransfer(token1, recipient, amount1)
             // transfer 0tz to token1 call %transfer<address * address * nat>((self_address, recipient, amount1));
-        end;
+        end
 
         // emit<CollectProtocol>({caller; recipient; amount0; amount1});
-        slot0.unlocked := true
     }
 }
 

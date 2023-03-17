@@ -1,5 +1,0 @@
-
-archetype IkodexV3MintCallback
-
-entry kodexV3MintCallback(amount0Owed: nat, amount1Owed: nat, data: bytes);
-

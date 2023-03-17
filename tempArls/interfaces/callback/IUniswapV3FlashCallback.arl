@@ -1,4 +1,0 @@
-
-archetype IkodexV3FlashCallback
-
-entry kodexV3FlashCallback(fee0: nat, fee1: nat, data: bytes) {};

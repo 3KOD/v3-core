@@ -7,7 +7,8 @@ constant INVALID_OPERATION: string = "ERR"
 constant MIN_TICK: int = -887272
 constant MAX_TICK: int = -MIN_TICK
 constant Q128: nat = 1 <<| 128
-constant original: address = self_address
+
+variable owner_candidate : option<address> = none
 
 enum token_type = 
 | tez_token<unit>
@@ -52,7 +53,6 @@ asset getPool identified by token0 token1 feeOfGetPool to big_map {
 entry createPool(tokenA: token_type, tokenB: token_type, fee_: nat) {
     no transfer
     effect {
-        do_require(self_address = original, "DCall");
         const compareAB: int ?= call_view<int>(kodexV3lib, "tokenCompare", (tokenA, tokenB)) : INVALID_OPERATION;
         do_require(compareAB <> 0i, INVALID_OPERATION);
         const token0_cp: token_type = (compareAB = (-1)) ? tokenA : tokenB;
@@ -100,14 +100,21 @@ entry createPool(tokenA: token_type, tokenB: token_type, fee_: nat) {
     }
 }
 
-entry setOwner(owner_: address) {
-    no transfer
-    called by owner
+entry declare_ownership(candidate : address) {
+  called by owner
+  effect {
+    owner_candidate := some(candidate);
+  }
+}
 
-    effect {
-        // emit<OwnerChanged>({owner; owner_});
-        owner := owner_
-    }
+entry claim_ownership() {
+  require {
+    ownership_r1: (owner_candidate ? the = caller : false) otherwise "INVALID_CALLER"
+  }
+  effect {
+    owner := caller;
+    owner_candidate := none
+  }
 }
 
 entry enableFeeAmount(fee_: nat, tickSpacing_: int) {

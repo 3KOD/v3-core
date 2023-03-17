@@ -1,9 +1,0 @@
-archetype IkodexV3Pool
-
-import IkodexV3PoolImmutables from "./pool/IkodexV3PoolImmutables.tz";
-import IkodexV3PoolState from "./pool/IkodexV3PoolState.tz";
-import IkodexV3PoolDerivedState from "./pool/IkodexV3PoolDerivedState.tz";
-import IkodexV3PoolActions from "./pool/IkodexV3PoolActions.tz";
-import IkodexV3PoolOwnerActions from "./pool/IkodexV3PoolOwnerActions.tz";
-import IkodexV3PoolEvents from "./pool/IkodexV3PoolEvents.tz";
-

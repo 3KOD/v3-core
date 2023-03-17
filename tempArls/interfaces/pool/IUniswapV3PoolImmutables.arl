@@ -1,9 +1,0 @@
-
-archetype IkodexV3PoolImmutables
-
-view factory(): address {};
-view token0(): address {};
-view token1(): address {};
-view fee(): nat {};
-view tickSpacing(): int {};
-view maxLiquidityPerTick(): nat {};

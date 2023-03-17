@@ -1,4 +1,0 @@
-
-archetype IkodexV3SwapCallback
-
-entry kodexV3SwapCallback(amount0Delta: int, amount1Delta: int, data: bytes);

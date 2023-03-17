@@ -124,7 +124,7 @@ record Slot0 {
     // represented as an integer denominator (1/x)%
     feeProtocol: nat;
     // whether the pool is locked
-    unlocked: bool;
+    // unlocked: bool;
 }
 
 // accumulated protocol fees in token0/token1 units
@@ -668,7 +668,6 @@ view burn(
 ): nat * nat
 {
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
-    do_require(slot0_.unlocked, "LOK");
 
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, INVALID_OPERATION);
@@ -744,7 +743,6 @@ view burn_PositionInfo_view(
 ) : PositionInfo
 {
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
-    do_require(slot0_.unlocked, "LOK");
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
     do_require(checkTicks_retVal, INVALID_OPERATION);
 
@@ -860,7 +858,6 @@ view mint_PositionInfo_view(
 ) : PositionInfo
 {
     const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
-    do_require(slot0_.unlocked, "LOK");
     do_require(amount > 0, INVALID_OPERATION);
 
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
@@ -957,7 +954,6 @@ view swap(
 ): int * int {
     do_require(amountSpecified <> 0, "AS");
     const slot0Start: Slot0 ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
-    do_require(slot0Start.unlocked, "LOK");
     do_require(
         zeroForOne
             ? ((sqrtPriceLimitX96 < slot0Start.sqrtPriceX96) and (sqrtPriceLimitX96 > MIN_SQRT_RATIO))
