@@ -73,7 +73,7 @@ entry createPool(tokenA: token_type, tokenB: token_type, fee_: nat) {
 
         const storage_init : (
             address * or<unit, or<address, (address * nat)>> * or<unit, or<address, (address * nat)>> * address * string * nat * int * nat * nat * nat * 
-            (nat * int * nat * nat * nat * nat * bool) * 
+            (nat * int * nat * nat * nat * nat) * 
             nat * nat * 
             (nat * nat) * nat * 
             (big_map<int, (nat * int * nat * nat * int * nat * nat * bool)>) * 
@@ -89,7 +89,7 @@ entry createPool(tokenA: token_type, tokenB: token_type, fee_: nat) {
             fee_, 
             tickSpacing_cp, 
             maxLiquidityPerTick, 
-            0, 0, (0, 0, 0, 0, 0, 0, false), 0, 0, (0, 0), 0, [], [], [], []
+            0, 0, (0, 0, 0, 0, 0, 0), 0, 0, (0, 0), 0, [], [], [], []
         );
         const op_addr : (operation * address) = create_contract(kodexV3Pool, none, 0tz, storage_init);
         operations := [op_addr[0]];
