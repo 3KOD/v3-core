@@ -24,10 +24,10 @@ completium-cli deploy ./contracts/kodexV3MathLibrary.arl
     https://better-call.dev/ghostnet/KT1P15iyFY9d4PUqVz49Rm2TnQFqtfeGvRCe
 
 completium-cli deploy ./contracts/kodexV3Library.arl --parameters '{"mathLib":"KT1P15iyFY9d4PUqVz49Rm2TnQFqtfeGvRCe"}'
-    total cost    : 6.022538 ꜩ
-    https://better-call.dev/ghostnet/KT1KSjr9YbBXzZushTS4HuJ9jjyp1j74GYCC
+    total cost    : 5.973841 ꜩ
+    https://better-call.dev/ghostnet/KT1KtbzHcike7oQTRgcnKC2fGYRUaHsuq4L6
 
-completium-cli deploy ./contracts/kodexV3Factory.arl --parameters '{"owner":"tz1afKmEFo11mpXr4JdodJDTXYLfw7GTFbak", "kodexV3lib":"KT1KSjr9YbBXzZushTS4HuJ9jjyp1j74GYCC"}'
+completium-cli deploy ./contracts/kodexV3Factory.arl --parameters '{"owner":"tz1afKmEFo11mpXr4JdodJDTXYLfw7GTFbak", "kodexV3lib":"KT1KtbzHcike7oQTRgcnKC2fGYRUaHsuq4L6"}'
     total cost    : 7.88292 ꜩ
-    https://better-call.dev/ghostnet/KT1NArLsaWtJeG8Jreza1EacSaH8KAhho5Wy
+    https://better-call.dev/ghostnet/KT1H3PMQ4wJuMPiwCP4mCgy4m1knMTUZacZb
 ```

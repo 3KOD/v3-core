@@ -857,7 +857,6 @@ view mint_PositionInfo_view(
     feeGrowthGlobal1X128_: nat
 ) : PositionInfo
 {
-    const slot0_ ?= call_view<Slot0>(poolAddress, "getSlot0", Unit) : INVALID_OPERATION;
     do_require(amount > 0, INVALID_OPERATION);
 
     const checkTicks_retVal ?= call_view<bool>(self_address, "checkTicks", (tickLower, tickUpper)) : INVALID_OPERATION;
