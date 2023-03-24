@@ -21,13 +21,13 @@ npm run gen-binding;
 
 completium-cli deploy ./contracts/kodexV3MathLibrary.arl
     total cost    : 5.003752 ꜩ
-    https://better-call.dev/ghostnet/KT1P15iyFY9d4PUqVz49Rm2TnQFqtfeGvRCe
+    https://better-call.dev/ghostnet/KT1T4kymk9SfQiLhGewMvzpwaE1vH26ZttDQ
 
-completium-cli deploy ./contracts/kodexV3Library.arl --parameters '{"mathLib":"KT1P15iyFY9d4PUqVz49Rm2TnQFqtfeGvRCe"}'
+completium-cli deploy ./contracts/kodexV3Library.arl --parameters '{"mathLib":"KT1T4kymk9SfQiLhGewMvzpwaE1vH26ZttDQ"}'
     total cost    : 5.973841 ꜩ
-    https://better-call.dev/ghostnet/KT1KtbzHcike7oQTRgcnKC2fGYRUaHsuq4L6
+    https://better-call.dev/ghostnet/KT1JqqYgRRYYq5kNPqYAUwWTtpuXZCtuAeaY
 
-completium-cli deploy ./contracts/kodexV3Factory.arl --parameters '{"owner":"tz1afKmEFo11mpXr4JdodJDTXYLfw7GTFbak", "kodexV3lib":"KT1KtbzHcike7oQTRgcnKC2fGYRUaHsuq4L6"}'
+completium-cli deploy ./contracts/kodexV3Factory.arl --parameters '{"owner":"tz1afKmEFo11mpXr4JdodJDTXYLfw7GTFbak", "kodexV3lib":"KT1JqqYgRRYYq5kNPqYAUwWTtpuXZCtuAeaY"}'
     total cost    : 7.88292 ꜩ
-    https://better-call.dev/ghostnet/KT1H3PMQ4wJuMPiwCP4mCgy4m1knMTUZacZb
+    https://better-call.dev/ghostnet/KT1L7qXzdRgD2tMiYvS2VVFfeob43SKs5a5U
 ```
